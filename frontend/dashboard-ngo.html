@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Khana Bachao — Browse Listings</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<!-- ── TOP NAV ── -->
+<nav id="nav">
+  <a href="dashboard-ngo.html" class="nav-brand">
+    <div class="leaf">🍃</div>
+    Khana Bachao
+  </a>
+
+  <div class="nav-links">
+    <a href="dashboard-ngo.html" class="nav-link active">Browse Listings</a>
+    <a href="chat-ngo.html"      class="nav-link">Messages</a>
+  </div>
+
+  <div class="nav-right">
+    <button class="notif-btn" onclick="toggleNotif()" id="notifBtn">
+      🔔
+      <span class="notif-dot" id="notifDot"></span>
+    </button>
+    <div class="notif-panel" id="notifPanel">
+      <div class="notif-panel-header">Notifications</div>
+      <div class="notif-item unread">
+        <div class="notif-item-title">New listing available!</div>
+        <div class="notif-item-sub">Biryani, Nihari, Raita — DHA Phase 5 (200 servings)</div>
+        <div class="notif-item-time">5 min ago</div>
+      </div>
+      <div class="notif-item unread">
+        <div class="notif-item-title">New listing available!</div>
+        <div class="notif-item-sub">Dal, Sabzi, Roti — Gulshan-e-Iqbal (100 servings)</div>
+        <div class="notif-item-time">2 hr ago</div>
+      </div>
+      <div class="notif-item">
+        <div class="notif-item-title">Reminder</div>
+        <div class="notif-item-sub">Your claim for Chicken Karahi is pending pickup.</div>
+        <div class="notif-item-time">Yesterday</div>
+      </div>
+    </div>
+
+    <div class="nav-user">
+      <div class="avatar ngo" id="userAvatar">?</div>
+      <span id="userName">Loading…</span>
+    </div>
+    <button class="btn-logout" onclick="logout()">Sign out</button>
+  </div>
+</nav>
+
+<!-- ── PAGE CONTENT ── -->
+<div class="page-wrapper">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Available Food Listings</h1>
+      <p class="page-subtitle">Claim surplus food to feed your community</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span class="badge badge-new">3 new today</span>
+      <button class="btn btn-sm">🔍 Search</button>
+    </div>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-label">Available now</div><div class="stat-value teal">6</div></div>
+    <div class="stat-card"><div class="stat-label">Claimed by you</div><div class="stat-value amber">2</div></div>
+    <div class="stat-card"><div class="stat-label">Total pickups done</div><div class="stat-value gray">14</div></div>
+    <div class="stat-card"><div class="stat-label">Meals facilitated</div><div class="stat-value brand">2,180</div></div>
+  </div>
+
+  <!-- Filter tabs -->
+  <div class="filter-tabs">
+    <button class="filter-tab active" onclick="filterListings('available', this)">
+      Available <span class="filter-count">6</span>
+    </button>
+    <button class="filter-tab" onclick="filterListings('claimed', this)">
+      My claims <span class="filter-count">2</span>
+    </button>
+    <button class="filter-tab" onclick="filterListings('completed', this)">
+      History <span class="filter-count">14</span>
+    </button>
+  </div>
+
+  <!-- Listings grid -->
+  <div class="listings-grid" id="listingsGrid"></div>
+
+</div><!-- /page-wrapper -->
+
+<!-- ── TOAST ── -->
+<div class="success-toast" id="successToast">✓ Listing claimed! Chat is now enabled.</div>
+
+<script>
+  /* ─── Auth guard ─── */
+  (function guard() {
+    const token = localStorage.getItem('kb_token');
+    const role  = localStorage.getItem('kb_role');
+    if (!token || role !== 'ngo') window.location.replace('index.html');
+  })();
+
+  /* ─── Populate nav user ─── */
+  (function populateUser() {
+    const name = localStorage.getItem('kb_name') || 'NGO';
+    document.getElementById('userName').textContent = name;
+    document.getElementById('userAvatar').textContent =
+      name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  })();
+
+  /* ─── Notification panel ─── */
+  function toggleNotif() {
+    document.getElementById('notifPanel').classList.toggle('open');
+    document.getElementById('notifDot').style.display = 'none';
+  }
+  document.addEventListener('click', e => {
+    if (!document.getElementById('notifBtn').contains(e.target))
+      document.getElementById('notifPanel').classList.remove('open');
+  });
+
+  /* ─── Sign out ─── */
+  function logout() {
+    localStorage.removeItem('kb_token');
+    localStorage.removeItem('kb_role');
+    localStorage.removeItem('kb_name');
+    window.location.href = 'index.html';
+  }
+
+  /* ─── Listing data (replace with API fetch later) ─── */
+  let currentFilter = 'available';
+
+  const allListings = [
+    { emoji:'🍛', name:'Biryani, Nihari, Raita',    qty:'~40 kg', serves:'200', location:'DHA Phase 5',     time:'Today, 10 PM',  status:'available', provider:'Al-Karim Wedding Hall',    init:'AK' },
+    { emoji:'🥘', name:'Dal, Sabzi, Roti, Kheer',   qty:'~22 kg', serves:'100', location:'Gulshan-e-Iqbal',  time:'Today, 8 PM',   status:'available', provider:'Friday Community Kitchen', init:'FC' },
+    { emoji:'🫕', name:'Chicken Karahi, Naan',       qty:'~15 kg', serves:'80',  location:'Clifton',          time:'Today, 11 PM',  status:'available', provider:'Spice Route Catering',     init:'SR' },
+    { emoji:'🍚', name:'Mutton Pulao, Salad, Dessert',qty:'~30 kg',serves:'150', location:'PECHS',            time:'Today, 9 PM',   status:'available', provider:'Grand Marquee Events',     init:'GM' },
+    { emoji:'🥗', name:'Sandwiches, Pastries, Juice',qty:'~8 kg',  serves:'40',  location:'I.I Chundrigar',   time:'Today, 7 PM',   status:'available', provider:'APEX Corp Cafeteria',      init:'AC' },
+    { emoji:'🍲', name:'Haleem, Naan, Chutney',      qty:'~12 kg', serves:'60',  location:'Bahadurabad',      time:'Today, 6 PM',   status:'available', provider:'Baba Haleem Restaurant',   init:'BH' },
+    { emoji:'🫖', name:'Qorma, Zarda, Raita',        qty:'~50 kg', serves:'250', location:'North Karachi',    time:'Yesterday',     status:'claimed',   provider:'Noman Wedding Hall',       init:'NW' },
+    { emoji:'🍗', name:'Mixed BBQ Platter',           qty:'~18 kg', serves:'90',  location:'Gulshan',          time:'2 days ago',    status:'claimed',   provider:'BBQ Tonight',              init:'BT' },
+    { emoji:'🍜', name:'Pasta, Garlic Bread, Soup',  qty:'~10 kg', serves:'50',  location:'Clifton',          time:'3 days ago',    status:'completed', provider:'Café Flo',                 init:'CF' },
+    { emoji:'🥘', name:'Hotel Buffet Mix',            qty:'~80 kg', serves:'400', location:'Saddar',           time:'4 days ago',    status:'completed', provider:'Pearl Continental',        init:'PC' },
+  ];
+
+  /* ─── Filter ─── */
+  function filterListings(filter, el) {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    renderListings(filter);
+  }
+
+  /* ─── Render cards ─── */
+  function renderListings(filter) {
+    const grid     = document.getElementById('listingsGrid');
+    const filtered = allListings.filter(l => l.status === filter);
+
+    if (filtered.length === 0) {
+      grid.innerHTML = `
+        <div class="empty-state" style="grid-column:1/-1;">
+          <div class="empty-icon">📭</div>
+          <div class="empty-title">No listings found</div>
+          <div class="empty-sub">Check back soon — you'll be notified when new food is posted.</div>
+        </div>`;
+      return;
+    }
+
+    grid.innerHTML = filtered.map((l, i) => {
+      const realIdx = allListings.indexOf(l);
+
+      const badge = l.status === 'available'
+        ? `<span class="badge badge-available">Available</span>`
+        : l.status === 'claimed'
+        ? `<span class="badge badge-claimed">Claimed</span>`
+        : `<span class="badge badge-completed">Completed</span>`;
+
+      const action = l.status === 'available'
+        ? `<button class="btn btn-sm btn-teal" onclick="claimListing(${realIdx})">Claim listing</button>`
+        : l.status === 'claimed'
+        ? `<a href="chat-ngo.html" class="btn btn-sm" style="border-color:var(--brand);color:var(--brand)">💬 Chat</a>`
+        : `<button class="btn btn-sm btn-ghost" disabled>Completed</button>`;
+
+      return `
+        <div class="listing-card">
+          <div class="listing-card-img">
+            <span style="font-size:48px;">${l.emoji}</span>
+            <div class="listing-card-badge">${badge}</div>
+          </div>
+          <div class="listing-card-body">
+            <div class="listing-card-title">${l.name}</div>
+            <div class="listing-meta">
+              <div class="listing-meta-row"><span class="listing-meta-icon">⚖️</span>${l.qty} — serves ~${l.serves} people</div>
+              <div class="listing-meta-row"><span class="listing-meta-icon">📍</span>${l.location}</div>
+              <div class="listing-meta-row"><span class="listing-meta-icon">🕐</span>${l.time}</div>
+            </div>
+          </div>
+          <div class="listing-card-footer">
+            <div class="provider-tag">
+              <div class="provider-dot">${l.init}</div>
+              ${l.provider}
+            </div>
+            ${action}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  /* ─── Claim a listing ─── */
+  async function claimListing(idx) {
+    const listing = allListings[idx];
+    if (!listing || listing.status !== 'available') return;
+
+    const btn = document.querySelector(
+      `.listing-card:nth-child(${allListings.filter(l => l.status === 'available').indexOf(listing) + 1}) button`
+    );
+
+    /* ── Replace with real API call when claim endpoint is ready ──
+    const res = await fetch(`http://localhost:8000/listings/${listing.id}/claim`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('kb_token')}` }
+    });
+    if (!res.ok) { alert('Could not claim — listing may already be taken.'); return; }
+    ── */
+
+    /* Simulate success */
+    listing.status = 'claimed';
+    renderListings(currentFilter);
+
+    const toast = document.getElementById('successToast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3500);
+  }
+
+  /* ─── Initial render ─── */
+  renderListings('available');
+</script>
+</body>
+</html>

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Khana Bachao — My Listings</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<!-- ── TOP NAV ── -->
+<nav id="nav">
+  <a href="dashboard-fp.html" class="nav-brand">
+    <div class="leaf">🍃</div>
+    Khana Bachao
+  </a>
+
+  <div class="nav-links">
+    <a href="dashboard-fp.html" class="nav-link active">My Listings</a>
+    <a href="chat-fp.html"      class="nav-link">Messages</a>
+  </div>
+
+  <div class="nav-right">
+    <button class="notif-btn" onclick="toggleNotif()" id="notifBtn">
+      🔔
+      <span class="notif-dot" id="notifDot"></span>
+    </button>
+    <div class="notif-panel" id="notifPanel">
+      <div class="notif-panel-header">Notifications</div>
+      <div class="notif-item unread">
+        <div class="notif-item-title">Listing claimed!</div>
+        <div class="notif-item-sub">Khidmat Foundation claimed your Biryani listing.</div>
+        <div class="notif-item-time">2 min ago</div>
+      </div>
+      <div class="notif-item unread">
+        <div class="notif-item-title">Listing claimed!</div>
+        <div class="notif-item-sub">Rizq Pakistan claimed your Mutton Pulao listing.</div>
+        <div class="notif-item-time">1 hr ago</div>
+      </div>
+      <div class="notif-item">
+        <div class="notif-item-title">Pickup completed</div>
+        <div class="notif-item-sub">Edhi Foundation confirmed pickup of Qorma.</div>
+        <div class="notif-item-time">Yesterday</div>
+      </div>
+    </div>
+
+    <div class="nav-user">
+      <div class="avatar" id="userAvatar">?</div>
+      <span id="userName">Loading…</span>
+    </div>
+    <button class="btn-logout" onclick="logout()">Sign out</button>
+  </div>
+</nav>
+
+<!-- ── PAGE CONTENT ── -->
+<div class="page-wrapper">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">My Listings</h1>
+      <p class="page-subtitle">Manage your surplus food postings</p>
+    </div>
+    <button class="btn btn-brand" onclick="openCreateModal()">+ Post surplus food</button>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-label">Total listings</div><div class="stat-value brand">8</div></div>
+    <div class="stat-card"><div class="stat-label">Available</div><div class="stat-value teal">2</div></div>
+    <div class="stat-card"><div class="stat-label">Claimed</div><div class="stat-value amber">3</div></div>
+    <div class="stat-card"><div class="stat-label">Completed</div><div class="stat-value gray">3</div></div>
+  </div>
+
+  <!-- Listings table -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">All listings</span>
+      <button class="btn btn-sm btn-ghost">Export</button>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Food / Dishes</th>
+            <th>Qty</th>
+            <th>Serves</th>
+            <th>Location</th>
+            <th>Available until</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><div class="td-food">Biryani, Nihari, Raita</div><div class="td-sub">Wedding event — 3 dishes</div></td>
+            <td>~40 kg</td><td>200</td><td>DHA Phase 5</td><td>Today, 10 PM</td>
+            <td><span class="badge badge-available">Available</span></td>
+            <td><button class="btn btn-sm btn-ghost" style="color:var(--text-hint);cursor:default;">No chat yet</button></td>
+          </tr>
+          <tr>
+            <td><div class="td-food">Dal, Sabzi, Roti, Kheer</div><div class="td-sub">Friday luncheon — 4 dishes</div></td>
+            <td>~22 kg</td><td>100</td><td>Gulshan-e-Iqbal</td><td>Today, 8 PM</td>
+            <td><span class="badge badge-available">Available</span></td>
+            <td><button class="btn btn-sm btn-ghost" style="color:var(--text-hint);cursor:default;">No chat yet</button></td>
+          </tr>
+          <tr>
+            <td><div class="td-food">Chicken Karahi, Naan</div><div class="td-sub">Catering leftover — 2 dishes</div></td>
+            <td>~15 kg</td><td>80</td><td>Clifton</td><td>Today, 11 PM</td>
+            <td><span class="badge badge-claimed">Claimed</span></td>
+            <td><a href="chat-fp.html" class="btn btn-sm btn-teal">💬 Chat</a></td>
+          </tr>
+          <tr>
+            <td><div class="td-food">Mutton Pulao, Salad, Dessert</div><div class="td-sub">Corporate dinner — 3 dishes</div></td>
+            <td>~30 kg</td><td>150</td><td>PECHS</td><td>Yesterday</td>
+            <td><span class="badge badge-claimed">Claimed</span></td>
+            <td><a href="chat-fp.html" class="btn btn-sm btn-teal">💬 Chat</a></td>
+          </tr>
+          <tr>
+            <td><div class="td-food">Qorma, Zarda, Raita</div><div class="td-sub">Mehndi function — 3 dishes</div></td>
+            <td>~50 kg</td><td>250</td><td>North Karachi</td><td>2 days ago</td>
+            <td><span class="badge badge-claimed">Claimed</span></td>
+            <td><a href="chat-fp.html" class="btn btn-sm btn-teal">💬 Chat</a></td>
+          </tr>
+          <tr>
+            <td><div class="td-food">Mixed Cuisine Buffet</div><div class="td-sub">Hotel banquet — 8 dishes</div></td>
+            <td>~80 kg</td><td>400</td><td>Saddar</td><td>3 days ago</td>
+            <td><span class="badge badge-completed">Completed</span></td>
+            <td><button class="btn btn-sm btn-ghost" disabled>Done</button></td>
+          </tr>
+          <tr>
+            <td><div class="td-food">Sandwiches, Pastries, Juice</div><div class="td-sub">Office meeting — snacks</div></td>
+            <td>~8 kg</td><td>40</td><td>I.I Chundrigar</td><td>4 days ago</td>
+            <td><span class="badge badge-completed">Completed</span></td>
+            <td><button class="btn btn-sm btn-ghost" disabled>Done</button></td>
+          </tr>
+          <tr>
+            <td><div class="td-food">Haleem, Naan, Chutney</div><div class="td-sub">Restaurant surplus</div></td>
+            <td>~12 kg</td><td>60</td><td>Bahadurabad</td><td>5 days ago</td>
+            <td><span class="badge badge-completed">Completed</span></td>
+            <td><button class="btn btn-sm btn-ghost" disabled>Done</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /page-wrapper -->
+
+<!-- ── CREATE LISTING MODAL ── -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">Post surplus food</h2>
+      <button class="modal-close" onclick="closeCreateModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Food name / dishes *</label>
+        <input class="form-input" type="text" id="newFoodName" placeholder="e.g. Biryani, Dal, Roti, Salad">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Estimated quantity *</label>
+          <input class="form-input" type="text" id="newQty" placeholder="e.g. 20 kg">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Approximate servings *</label>
+          <input class="form-input" type="number" id="newServings" placeholder="e.g. 100">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Pickup location *</label>
+        <input class="form-input" type="text" id="newLocation" placeholder="e.g. 45-B, Block 6, PECHS, Karachi">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Available from *</label>
+          <input class="form-input" type="time" id="newFrom" value="18:00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Available until *</label>
+          <input class="form-input" type="time" id="newUntil" value="22:00">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Additional notes</label>
+        <textarea class="form-textarea" id="newNotes" placeholder="e.g. Vegetarian, freshly cooked, no pork…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Food photos (optional)</label>
+        <div class="upload-zone">
+          <div class="upload-icon">📷</div>
+          Click to upload photos — helps NGOs assess quickly
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeCreateModal()">Cancel</button>
+      <button class="btn btn-brand" id="postBtn" onclick="submitListing()">Post listing →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div class="success-toast" id="successToast">✓ Listing posted! NGOs have been notified.</div>
+
+<script>
+  /* ─── Auth guard — redirect to login if no token ─── */
+  (function guard() {
+    const token = localStorage.getItem('kb_token');
+    const role  = localStorage.getItem('kb_role');
+    if (!token || role !== 'food_provider') window.location.replace('index.html');
+  })();
+
+  /* ─── Populate user name in nav ─── */
+  (function populateUser() {
+    const name = localStorage.getItem('kb_name') || 'Provider';
+    document.getElementById('userName').textContent = name;
+    document.getElementById('userAvatar').textContent =
+      name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  })();
+
+  /* ─── Notification panel toggle ─── */
+  function toggleNotif() {
+    document.getElementById('notifPanel').classList.toggle('open');
+    document.getElementById('notifDot').style.display = 'none';
+  }
+  document.addEventListener('click', e => {
+    if (!document.getElementById('notifBtn').contains(e.target))
+      document.getElementById('notifPanel').classList.remove('open');
+  });
+
+  /* ─── Sign out ─── */
+  function logout() {
+    localStorage.removeItem('kb_token');
+    localStorage.removeItem('kb_role');
+    localStorage.removeItem('kb_name');
+    window.location.href = 'index.html';
+  }
+
+  /* ─── Create listing modal ─── */
+  function openCreateModal()  { document.getElementById('createModal').classList.add('open'); }
+  function closeCreateModal() { document.getElementById('createModal').classList.remove('open'); }
+
+  async function submitListing() {
+    const name     = document.getElementById('newFoodName').value.trim();
+    const qty      = document.getElementById('newQty').value.trim();
+    const servings = document.getElementById('newServings').value.trim();
+    const location = document.getElementById('newLocation').value.trim();
+    const from     = document.getElementById('newFrom').value;
+    const until    = document.getElementById('newUntil').value;
+
+    if (!name || !qty || !servings || !location) {
+      alert('Please fill in all required fields.');
+      return;
+    }
+
+    const btn = document.getElementById('postBtn');
+    btn.disabled  = true;
+    btn.innerHTML = '<span class="spinner"></span> Posting…';
+
+    try {
+      /* ── Replace with real API call when listing endpoint is ready ──
+      const res = await fetch('http://localhost:8000/listings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('kb_token')}`
+        },
+        body: JSON.stringify({ name, qty, servings: +servings, location,
+                               available_from: from, available_until: until,
+                               notes: document.getElementById('newNotes').value })
+      });
+      if (!res.ok) throw new Error('Failed to post listing');
+      ── */
+
+      /* Simulate success for now */
+      await new Promise(r => setTimeout(r, 800));
+
+      closeCreateModal();
+      const toast = document.getElementById('successToast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 3500);
+
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled  = false;
+      btn.innerHTML = 'Post listing →';
+    }
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Khana Bachao — Sign In</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="login-page">
+  <div class="login-container">
+
+    <!-- ── LEFT: Hero panel ── -->
+    <div class="login-hero">
+      <div>
+        <div style="font-size:32px; margin-bottom:10px;">🍛</div>
+        <div class="login-hero-brand">Khana Bachao</div>
+        <div class="login-hero-sub">
+          A coordination platform connecting surplus food providers
+          with verified NGOs — reducing waste, feeding communities.
+        </div>
+        <div class="hero-stat-grid">
+          <div class="hero-stat"><div class="hero-stat-num">2.4k</div><div class="hero-stat-label">Meals rescued</div></div>
+          <div class="hero-stat"><div class="hero-stat-num">38</div><div class="hero-stat-label">NGO partners</div></div>
+          <div class="hero-stat"><div class="hero-stat-num">120</div><div class="hero-stat-label">Active providers</div></div>
+          <div class="hero-stat"><div class="hero-stat-num">94%</div><div class="hero-stat-label">Claim rate</div></div>
+        </div>
+      </div>
+      <div class="hero-quote">"No food should go to waste when someone goes hungry."</div>
+    </div>
+
+    <!-- ── RIGHT: Form panel ── -->
+    <div class="login-form-side">
+      <h2 class="login-title" id="formTitle">Welcome back</h2>
+      <p class="login-subtitle" id="formSubtitle">Choose your role to continue</p>
+
+      <!-- Role tabs -->
+      <div class="role-tabs">
+        <button class="role-tab active" id="tab-fp"  onclick="switchRole('fp')">🍽 Food Provider</button>
+        <button class="role-tab"        id="tab-ngo" onclick="switchRole('ngo')">🤝 NGO</button>
+      </div>
+
+      <!-- API error / success banner -->
+      <div class="alert alert-error" id="alertBox"></div>
+
+      <!-- ── Register-only fields (hidden by default) ── -->
+      <div class="reg-fields" id="reg-fields">
+        <div class="form-group">
+          <label class="form-label" for="nameInput">Organisation / Restaurant name</label>
+          <input class="form-input" type="text" id="nameInput" placeholder="e.g. Al-Karim Wedding Hall" autocomplete="organization">
+          <div class="field-error" id="nameError">Name is required</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="phoneInput">WhatsApp / Phone number</label>
+          <input class="form-input" type="tel" id="phoneInput" placeholder="+92 300 0000000" autocomplete="tel">
+        </div>
+      </div>
+
+      <!-- ── Always visible fields ── -->
+      <div class="form-group">
+        <label class="form-label" for="emailInput">Email address</label>
+        <input class="form-input" type="email" id="emailInput" placeholder="you@example.com" autocomplete="email">
+        <div class="field-error" id="emailError">Enter a valid email</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="passInput">Password</label>
+        <input class="form-input" type="password" id="passInput" placeholder="••••••••" autocomplete="current-password">
+        <div class="field-error" id="passError">Password is required</div>
+      </div>
+
+      <!-- NGO info note (shown when NGO tab selected) -->
+      <div class="ngo-note" id="ngo-note" style="display:none;">
+        NGO accounts are pre-verified by administrators.
+        Contact admin if you don't have login credentials yet.
+      </div>
+
+      <!-- Submit -->
+      <button class="btn-primary" id="submitBtn" onclick="handleSubmit()">Sign in as Food Provider</button>
+
+      <!-- Toggle register/login -->
+      <div class="login-toggle" id="loginToggle">
+        New here? <a onclick="toggleRegister()">Create an account</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  /* ═══════════════════════════════════════
+     CONFIG — change this to your backend URL
+  ═══════════════════════════════════════ */
+  const API = 'http://localhost:8000';
+
+  /* ─── state ─── */
+  let currentRole = 'fp';
+  let isRegister  = false;
+
+  /* ─── redirect if already logged in ─── */
+  (function checkAuth() {
+    const token = localStorage.getItem('kb_token');
+    const role  = localStorage.getItem('kb_role');
+    if (token && role === 'food_provider') window.location.replace('dashboard-fp.html');
+    if (token && role === 'ngo')           window.location.replace('dashboard-ngo.html');
+  })();
+
+  /* ─── Role tab switch ─── */
+  function switchRole(role) {
+    currentRole = role;
+    document.getElementById('tab-fp') .classList.toggle('active', role === 'fp');
+    document.getElementById('tab-ngo').classList.toggle('active', role === 'ngo');
+    document.getElementById('ngo-note').style.display = role === 'ngo' ? 'block' : 'none';
+    document.getElementById('loginToggle').style.display = role === 'ngo' ? 'none' : 'block';
+
+    /* NGO can only log in, not register */
+    if (role === 'ngo' && isRegister) toggleRegister();
+
+    updateBtn();
+    clearErrors();
+  }
+
+  /* ─── Toggle register/login ─── */
+  function toggleRegister() {
+    isRegister = !isRegister;
+    const reg = document.getElementById('reg-fields');
+    reg.classList.toggle('show', isRegister);
+
+    document.getElementById('formTitle').textContent    = isRegister ? 'Create an account' : 'Welcome back';
+    document.getElementById('formSubtitle').textContent = isRegister ? 'Register as a food provider' : 'Choose your role to continue';
+    document.getElementById('loginToggle').innerHTML = isRegister
+      ? 'Already registered? <a onclick="toggleRegister()">Sign in</a>'
+      : 'New here? <a onclick="toggleRegister()">Create an account</a>';
+
+    updateBtn();
+    clearErrors();
+  }
+
+  function updateBtn() {
+    const btn = document.getElementById('submitBtn');
+    if (isRegister)             btn.textContent = 'Create account';
+    else if (currentRole === 'fp')  btn.textContent = 'Sign in as Food Provider';
+    else                        btn.textContent = 'Sign in as NGO';
+  }
+
+  /* ─── Main handler — calls register or login ─── */
+  async function handleSubmit() {
+    clearErrors();
+    if (!validate()) return;
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled    = true;
+    btn.innerHTML   = '<span class="spinner"></span>';
+
+    try {
+      if (isRegister) {
+        await doRegister();
+      } else {
+        await doLogin();
+      }
+    } catch (err) {
+      showAlert(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      btn.disabled  = false;
+      updateBtn();
+    }
+  }
+
+  /* ─── Register ─── */
+  async function doRegister() {
+    const body = {
+      name:     document.getElementById('nameInput').value.trim(),
+      email:    document.getElementById('emailInput').value.trim(),
+      phone:    document.getElementById('phoneInput').value.trim() || null,
+      password: document.getElementById('passInput').value,
+    };
+
+    const res  = await fetch(`${API}/auth/register`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Registration failed');
+
+    saveSession(data);
+    window.location.href = 'dashboard-fp.html';
+  }
+
+  /* ─── Login ─── */
+  async function doLogin() {
+    const body = {
+      email:    document.getElementById('emailInput').value.trim(),
+      password: document.getElementById('passInput').value,
+      role:     currentRole === 'fp' ? 'food_provider' : 'ngo',
+    };
+
+    const res  = await fetch(`${API}/auth/login`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Invalid credentials');
+
+    saveSession(data);
+    window.location.href = data.role === 'food_provider'
+      ? 'dashboard-fp.html'
+      : 'dashboard-ngo.html';
+  }
+
+  /* ─── Persist token + user info ─── */
+  function saveSession(data) {
+    localStorage.setItem('kb_token', data.access_token);
+    localStorage.setItem('kb_role',  data.role);
+    localStorage.setItem('kb_name',  data.name);
+  }
+
+  /* ─── Validation ─── */
+  function validate() {
+    let ok = true;
+    const email = document.getElementById('emailInput').value.trim();
+    const pass  = document.getElementById('passInput').value;
+
+    if (isRegister) {
+      const name = document.getElementById('nameInput').value.trim();
+      if (!name) { showFieldError('nameError'); ok = false; }
+    }
+    if (!email || !email.includes('@')) { showFieldError('emailError'); ok = false; }
+    if (!pass)  { showFieldError('passError');  ok = false; }
+    return ok;
+  }
+
+  /* ─── Helpers ─── */
+  function showAlert(msg) {
+    const box = document.getElementById('alertBox');
+    box.textContent = msg;
+    box.classList.add('show');
+  }
+  function showFieldError(id) {
+    document.getElementById(id).classList.add('show');
+  }
+  function clearErrors() {
+    document.getElementById('alertBox').classList.remove('show');
+    document.querySelectorAll('.field-error').forEach(e => e.classList.remove('show'));
+    document.querySelectorAll('.form-input').forEach(i => i.classList.remove('error'));
+  }
+
+  /* ─── Allow Enter key to submit ─── */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleSubmit();
+  });
+</script>
+</body>
+</html>
