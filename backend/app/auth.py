@@ -31,9 +31,18 @@ def create_token(data: dict) -> str:
             detail="Authentication configuration is missing.",
         )
 
+    expire_minutes_raw = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
+    try:
+        expire_minutes = int(expire_minutes_raw)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication configuration is invalid: ACCESS_TOKEN_EXPIRE_MINUTES must be an integer.",
+        )
+
     payload = data.copy()
     payload["exp"] = datetime.utcnow() + timedelta(
-        minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
+        minutes=expire_minutes
     )
     return jwt.encode(
         payload, 
