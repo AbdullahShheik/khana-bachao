@@ -110,8 +110,21 @@ class ListingCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_time_window(self):
-        if self.available_from and self.available_until <= self.available_from:
-            raise ValueError("available_until must be later than available_from.")
+        if self.available_from:
+            available_from_is_aware = (
+                self.available_from.tzinfo is not None
+                and self.available_from.utcoffset() is not None
+            )
+            available_until_is_aware = (
+                self.available_until.tzinfo is not None
+                and self.available_until.utcoffset() is not None
+            )
+            if available_from_is_aware != available_until_is_aware:
+                raise ValueError(
+                    "available_from and available_until must both be timezone-aware or both be timezone-naive."
+                )
+            if self.available_until <= self.available_from:
+                raise ValueError("available_until must be later than available_from.")
         return self
 
 

@@ -23,14 +23,22 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(pwd_bytes, hashed_bytes)
 
 def create_token(data: dict) -> str:
+    secret_key = os.getenv("SECRET_KEY")
+    algorithm = os.getenv("ALGORITHM")
+    if not secret_key or not algorithm:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication configuration is missing.",
+        )
+
     payload = data.copy()
     payload["exp"] = datetime.utcnow() + timedelta(
         minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
     )
     return jwt.encode(
         payload, 
-        os.getenv("SECRET_KEY"),
-        algorithm=os.getenv("ALGORITHM")
+        secret_key,
+        algorithm=algorithm
     )
 
 

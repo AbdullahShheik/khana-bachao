@@ -1,5 +1,6 @@
-    # backend/app/routes/listings.py
+# backend/app/routes/listings.py
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import SQLAlchemyError
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session, joinedload
 
@@ -66,35 +67,48 @@ def create_listing(
     db: Session = Depends(get_db),
     current_user: dict = Depends(require_food_provider),
 ):
-    listing = FoodListing(
-        food_provider_id=current_user["id"],
-        status="available",
-        location=body.location,
-        available_from=body.available_from,
-        available_until=body.available_until,
-        notes=body.notes,
-    )
-    db.add(listing)
-    db.flush()
+    try:
+        listing = FoodListing(
+            food_provider_id=current_user["id"],
+            status="available",
+            location=body.location,
+            available_from=body.available_from,
+            available_until=body.available_until,
+            notes=body.notes,
+        )
+        db.add(listing)
+        db.flush()
 
-    for item in body.food_items:
-        db.add(
-            FoodItem(
-                listing_id=listing.id,
-                item_name=item.item_name,
-                estimated_weight=item.estimated_weight,
-                estimated_serving=item.estimated_serving,
-                image_url=item.image_url,
+        for item in body.food_items:
+            db.add(
+                FoodItem(
+                    listing_id=listing.id,
+                    item_name=item.item_name,
+                    estimated_weight=item.estimated_weight,
+                    estimated_serving=item.estimated_serving,
+                    image_url=item.image_url,
+                )
             )
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create listing.",
         )
 
-    db.commit()
     created_listing = (
         db.query(FoodListing)
         .options(joinedload(FoodListing.food_items))
         .filter(FoodListing.id == listing.id)
         .first()
     )
+    if not created_listing:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Listing created but failed to load response.",
+        )
+
     return created_listing
 
 
