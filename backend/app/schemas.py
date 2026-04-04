@@ -108,6 +108,21 @@ class ListingCreate(BaseModel):
             raise ValueError("A listing must include at least one food item.")
         return v
 
+    @model_validator(mode="after")
+    def validate_time_window(self):
+        available_from_has_tz = (
+            self.available_from is not None
+            and self.available_from.tzinfo is not None
+        )
+        available_until_has_tz = self.available_until.tzinfo is not None
+        if available_from_has_tz or available_until_has_tz:
+            raise ValueError(
+                "available_from and available_until must be timezone-naive datetimes."
+            )
+        if self.available_from and self.available_until <= self.available_from:
+            raise ValueError("available_until must be later than available_from.")
+        return self
+
 
 class ListingResponse(BaseModel):
     id:              int
