@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
 from .routes import auth as auth_router
+from .routes import listings as listings_router
 
 Base.metadata.create_all(bind=engine)   # creates tables automatically
 
@@ -16,6 +17,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router.router)
+app.include_router(listings_router.router)
 
 @app.get("/")
 def root():

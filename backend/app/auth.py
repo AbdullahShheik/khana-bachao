@@ -1,6 +1,7 @@
 # backend/app/auth.py
 import bcrypt
-from jose import jwt
+from fastapi import HTTPException, status
+from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
@@ -31,3 +32,22 @@ def create_token(data: dict) -> str:
         os.getenv("SECRET_KEY"),
         algorithm=os.getenv("ALGORITHM")
     )
+
+
+def decode_token(token: str) -> dict:
+    secret_key = os.getenv("SECRET_KEY")
+    algorithm = os.getenv("ALGORITHM")
+
+    if not secret_key or not algorithm:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication configuration is missing.",
+        )
+
+    try:
+        return jwt.decode(token, secret_key, algorithms=[algorithm])
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token.",
+        )
