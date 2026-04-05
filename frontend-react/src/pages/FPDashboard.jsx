@@ -10,6 +10,9 @@ const FPDashboard = () => {
   const [showNotif, setShowNotif] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [imageUrl, setImageUrl] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   // New listing form state
   const [formData, setFormData] = useState({
@@ -24,6 +27,25 @@ const FPDashboard = () => {
 
   const navigate = useNavigate();
 
+  // Helper: get auth header
+  const authHeader = () => ({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${localStorage.getItem('kb_token')}`,
+  });
+
+  // Fetch listings from GET /listings/my
+  const fetchListings = async () => {
+    try {
+      const res = await fetch(`${API}/listings/my`, { headers: authHeader() });
+      if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
+      if (!res.ok) throw new Error('Failed to load listings');
+      const data = await res.json();
+      setListings(data);
+    } catch (err) {
+      console.error('fetchListings error:', err);
+    }
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('kb_token');
     const role = localStorage.getItem('kb_role');
@@ -35,7 +57,7 @@ const FPDashboard = () => {
     }
 
     setUser({ name, role });
-    // fetchListings(); // To be implemented when API is ready
+    fetchListings();
   }, [navigate]);
 
   const logout = () => {
@@ -48,32 +70,116 @@ const FPDashboard = () => {
     setFormData(prev => ({ ...prev, [id]: value }));
   };
 
+  // Build today's date + time string for the API (timezone-naive)
+  const toDatetime = (timeStr) => {
+    const today = new Date().toISOString().split('T')[0]; // "2026-04-05"
+    return `${today}T${timeStr}:00`; // "2026-04-05T18:00:00"
+  };
+
+  // POST /listings with real API call
+  // Upload a photo to POST /upload
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+
+      const res = await fetch(`${API}/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('kb_token')}` },
+        body: fd,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Upload failed');
+      }
+
+      const data = await res.json();
+      setImageUrl(data.url); // e.g. "/uploads/abc123.jpg"
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const submitListing = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
 
     try {
-      // Simulate API call
-      await new Promise(r => setTimeout(r, 1000));
+      const body = {
+        location: formData.location,
+        available_from: toDatetime(formData.from),
+        available_until: toDatetime(formData.until),
+        notes: formData.notes || null,
+        food_items: [
+          {
+            item_name: formData.name,
+            estimated_weight: formData.qty || null,
+            estimated_serving: formData.servings ? parseInt(formData.servings) : null,
+            image_url: imageUrl,
+          },
+        ],
+      };
+
+      const res = await fetch(`${API}/listings`, {
+        method: 'POST',
+        headers: authHeader(),
+        body: JSON.stringify(body),
+      });
+
+      if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
+      if (res.status === 403) { setError('Only Food Providers can post listings.'); return; }
+
+      const data = await res.json();
+      if (!res.ok) {
+        const msg = typeof data.detail === 'string' ? data.detail : 'Failed to create listing.';
+        setError(msg);
+        return;
+      }
 
       setShowModal(false);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3500);
 
-      // Reset form
+      // Reset form and refresh listings
       setFormData({
         name: '', qty: '', servings: '', location: '',
         from: '18:00', until: '22:00', notes: ''
       });
+      setImageUrl(null);
+      fetchListings();
     } catch (err) {
-      alert(err.message);
+      setError(err.message || 'Something went wrong.');
     } finally {
       setLoading(false);
     }
   };
 
   const getInitials = (name) => {
+    if (!name) return '?';
     return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  };
+
+  // Format a datetime string for display
+  const formatTime = (dt) => {
+    if (!dt) return '—';
+    const d = new Date(dt);
+    return d.toLocaleString('en-PK', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  };
+
+  // Compute stats from real data
+  const stats = {
+    total: listings.length,
+    available: listings.filter(l => l.status === 'available').length,
+    claimed: listings.filter(l => l.status === 'claimed').length,
+    completed: listings.filter(l => l.status === 'completed').length,
   };
 
   return (
@@ -87,7 +193,7 @@ const FPDashboard = () => {
 
         <div className="nav-links">
           <Link to="/fp/dashboard" className="nav-link active">My Listings</Link>
-          <Link to="/chat" class="nav-link">Messages</Link>
+          <Link to="/chat" className="nav-link">Messages</Link>
         </div>
 
         <div className="nav-right">
@@ -104,7 +210,6 @@ const FPDashboard = () => {
                 <div className="notif-item-sub">Khidmat Foundation claimed your Biryani listing.</div>
                 <div className="notif-item-time">2 min ago</div>
               </div>
-              {/* ... more items */}
             </div>
           )}
 
@@ -126,15 +231,15 @@ const FPDashboard = () => {
           <button className="btn btn-brand" onClick={() => setShowModal(true)}>+ Post surplus food</button>
         </div>
 
-        {/* Stat cards */}
+        {/* Stat cards — now computed from real data */}
         <div className="stat-grid">
-          <div className="stat-card"><div className="stat-label">Total listings</div><div className="stat-value brand">8</div></div>
-          <div className="stat-card"><div className="stat-label">Available</div><div className="stat-value teal">2</div></div>
-          <div className="stat-card"><div className="stat-label">Claimed</div><div className="stat-value amber">3</div></div>
-          <div className="stat-card"><div className="stat-label">Completed</div><div className="stat-value gray">3</div></div>
+          <div className="stat-card"><div className="stat-label">Total listings</div><div className="stat-value brand">{stats.total}</div></div>
+          <div className="stat-card"><div className="stat-label">Available</div><div className="stat-value teal">{stats.available}</div></div>
+          <div className="stat-card"><div className="stat-label">Claimed</div><div className="stat-value amber">{stats.claimed}</div></div>
+          <div className="stat-card"><div className="stat-label">Completed</div><div className="stat-value gray">{stats.completed}</div></div>
         </div>
 
-        {/* Listings table */}
+        {/* Listings table — now rendered from API data */}
         <div className="card">
           <div className="card-header">
             <span className="card-title">All listings</span>
@@ -154,14 +259,32 @@ const FPDashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {/* Sample row */}
-                <tr>
-                  <td><div className="td-food">Biryani, Nihari, Raita</div><div className="td-sub">Wedding event — 3 dishes</div></td>
-                  <td>~40 kg</td><td>200</td><td>DHA Phase 5</td><td>Today, 10 PM</td>
-                  <td><span className="badge badge-available">Available</span></td>
-                  <td><button className="btn btn-sm btn-ghost" disabled>No chat yet</button></td>
-                </tr>
-                {/* ... more rows */}
+                {listings.length > 0 ? (
+                  listings.map(listing => (
+                    <tr key={listing.id}>
+                      <td>
+                        <div className="td-food">
+                          {listing.food_items.map(fi => fi.item_name).join(', ')}
+                        </div>
+                        <div className="td-sub">
+                          {listing.food_items.length} dish{listing.food_items.length !== 1 ? 'es' : ''}
+                        </div>
+                      </td>
+                      <td>{listing.food_items[0]?.estimated_weight || '—'}</td>
+                      <td>{listing.food_items[0]?.estimated_serving || '—'}</td>
+                      <td>{listing.location}</td>
+                      <td>{formatTime(listing.available_until)}</td>
+                      <td><span className={`badge badge-${listing.status}`}>{listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}</span></td>
+                      <td><button className="btn btn-sm btn-ghost" disabled>No chat yet</button></td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: '#888' }}>
+                      No listings yet. Click "+ Post surplus food" to create your first one!
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -174,10 +297,11 @@ const FPDashboard = () => {
           <div className="modal">
             <div className="modal-header">
               <h2 className="modal-title">Post surplus food</h2>
-              <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
+              <button className="modal-close" onClick={() => { setShowModal(false); setError(''); }}>✕</button>
             </div>
             <form onSubmit={submitListing}>
               <div className="modal-body">
+                {error && <div className="alert alert-error show">{error}</div>}
                 <div className="form-group">
                   <label className="form-label">Food name / dishes *</label>
                   <input
@@ -261,15 +385,36 @@ const FPDashboard = () => {
                   ></textarea>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Food photos (optional)</label>
-                  <div className="upload-zone">
-                    <div className="upload-icon">📷</div>
-                    Click to upload photos — helps NGOs assess quickly
-                  </div>
+                  <label className="form-label">Food photo (optional)</label>
+                  {imageUrl ? (
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                      <img
+                        src={`${API}${imageUrl}`}
+                        alt="Preview"
+                        style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', borderRadius: '8px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setImageUrl(null)}
+                        style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', fontSize: '14px' }}
+                      >✕</button>
+                    </div>
+                  ) : (
+                    <label className="upload-zone" style={{ cursor: 'pointer' }}>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={handlePhotoUpload}
+                        style={{ display: 'none' }}
+                      />
+                      <div className="upload-icon">{uploading ? '⏳' : '📷'}</div>
+                      {uploading ? 'Uploading...' : 'Click to upload a photo — helps NGOs assess quickly'}
+                    </label>
+                  )}
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn" onClick={() => setShowModal(false)}>Cancel</button>
+                <button type="button" className="btn" onClick={() => { setShowModal(false); setError(''); }}>Cancel</button>
                 <button type="submit" className="btn btn-brand" disabled={loading}>
                   {loading ? <span className="spinner"></span> : 'Post listing →'}
                 </button>
