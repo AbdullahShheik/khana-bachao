@@ -1,0 +1,4 @@
+echo "khana-bachao-dev/" >> backend/.gitignore
+echo ".env" >> backend/.gitignore
+echo "__pycache__/" >> backend/.gitignore
+echo "*.pyc" >> backend/.gitignore
