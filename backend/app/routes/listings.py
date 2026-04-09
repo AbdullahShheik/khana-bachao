@@ -1,13 +1,13 @@
 # backend/app/routes/listings.py
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session, joinedload
 
 from ..auth import decode_token
 from ..database import get_db
-from ..models import FoodItem, FoodListing
-from ..schemas import ListingCreate, ListingResponse
+from ..models import Chat, FoodItem, FoodListing, ListingClaim
+from ..schemas import ClaimResponse, ListingCreate, ListingResponse
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -140,6 +140,85 @@ def get_my_listings(
         .all()
     )
     return listings
+
+
+@router.get("/my-claims", response_model=list[ListingResponse])
+def get_my_claimed_listings(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_ngo),
+):
+    listings = (
+        db.query(FoodListing)
+        .join(ListingClaim, ListingClaim.listing_id == FoodListing.id)
+        .options(joinedload(FoodListing.food_items))
+        .filter(ListingClaim.ngo_id == current_user["id"])
+        .order_by(ListingClaim.claimed_at.desc())
+        .all()
+    )
+    return listings
+
+
+@router.post("/{listing_id}/claim", response_model=ClaimResponse)
+def claim_listing(
+    listing_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_ngo),
+):
+    try:
+        listing = (
+            db.query(FoodListing)
+            .filter(FoodListing.id == listing_id)
+            .with_for_update()
+            .first()
+        )
+
+        if not listing:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Listing not found.",
+            )
+
+        if listing.status != "available":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This listing is no longer available for claim.",
+            )
+
+        claim = ListingClaim(listing_id=listing.id, ngo_id=current_user["id"])
+        listing.status = "claimed"
+
+        db.add(claim)
+        db.flush()
+
+        chat = Chat(claim_id=claim.id)
+        db.add(chat)
+        db.flush()
+
+        db.commit()
+        db.refresh(claim)
+
+        return ClaimResponse(
+            id=claim.id,
+            listing_id=claim.listing_id,
+            ngo_id=claim.ngo_id,
+            claimed_at=claim.claimed_at,
+            chat_id=chat.id,
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This listing is no longer available for claim.",
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to claim listing.",
+        )
 
 
 @router.get("/{listing_id}", response_model=ListingResponse)

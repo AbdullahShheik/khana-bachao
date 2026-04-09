@@ -11,6 +11,8 @@ const NGODashboard = () => {
   const [showNotif, setShowNotif] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [loadingListings, setLoadingListings] = useState(true);
+  const [claimingId, setClaimingId] = useState(null);
+  const [claimError, setClaimError] = useState('');
 
   const navigate = useNavigate();
 
@@ -19,18 +21,48 @@ const NGODashboard = () => {
     Authorization: `Bearer ${localStorage.getItem('kb_token')}`,
   });
 
-  // Fetch available listings from GET /listings
+  const normalizeListing = (listing, fallbackStatus) => ({
+    ...listing,
+    _status: listing.status || fallbackStatus,
+  });
+
+  // Fetch available + claimed listings
   const fetchListings = async () => {
     setLoadingListings(true);
+    setClaimError('');
     try {
-      const res = await fetch(`${API}/listings`, { headers: authHeader() });
-      if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
-      if (!res.ok) throw new Error('Failed to load listings');
-      const data = await res.json();
-      // All listings from this endpoint are "available" (backend filters)
-      setListings(data.map(l => ({ ...l, _status: 'available' })));
+      const [availableRes, claimedRes] = await Promise.all([
+        fetch(`${API}/listings`, { headers: authHeader() }),
+        fetch(`${API}/listings/my-claims`, { headers: authHeader() }),
+      ]);
+
+      if (availableRes.status === 401 || claimedRes.status === 401) {
+        localStorage.clear();
+        navigate('/login');
+        return;
+      }
+
+      const availableData = await availableRes.json();
+      const claimedData = await claimedRes.json();
+
+      if (!availableRes.ok) {
+        throw new Error(availableData.detail || 'Failed to load available listings');
+      }
+      if (!claimedRes.ok) {
+        throw new Error(claimedData.detail || 'Failed to load your claimed listings');
+      }
+
+      const allListings = [
+        ...availableData.map((l) => normalizeListing(l, 'available')),
+        ...claimedData.map((l) => normalizeListing(l, 'claimed')),
+      ];
+
+      const mergedById = new Map();
+      allListings.forEach((listing) => mergedById.set(listing.id, listing));
+      setListings(Array.from(mergedById.values()));
     } catch (err) {
       console.error('fetchListings error:', err);
+      setClaimError(err.message || 'Failed to load listings.');
     } finally {
       setLoadingListings(false);
     }
@@ -55,11 +87,48 @@ const NGODashboard = () => {
     navigate('/login');
   };
 
-  // Claim is still local-only (backend endpoint not ready yet)
-  const claimListing = (id) => {
-    setListings(prev => prev.map(l => l.id === id ? { ...l, _status: 'claimed' } : l));
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3500);
+  const claimListing = async (id) => {
+    setClaimingId(id);
+    setClaimError('');
+
+    try {
+      const res = await fetch(`${API}/listings/${id}/claim`, {
+        method: 'POST',
+        headers: authHeader(),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 401) {
+        localStorage.clear();
+        navigate('/login');
+        return;
+      }
+
+      if (res.status === 409) {
+        await fetchListings();
+        throw new Error(data.detail || 'This listing is no longer available for claim.');
+      }
+
+      if (!res.ok) {
+        throw new Error(data.detail || 'Failed to claim listing.');
+      }
+
+      setListings((prev) =>
+        prev.map((listing) =>
+          listing.id === id
+            ? { ...listing, status: 'claimed', _status: 'claimed' }
+            : listing
+        )
+      );
+
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3500);
+    } catch (err) {
+      setClaimError(err.message || 'Failed to claim listing.');
+    } finally {
+      setClaimingId(null);
+    }
   };
 
   const getInitials = (name) => {
@@ -85,9 +154,12 @@ const NGODashboard = () => {
   };
 
   // Filter listings based on local status
-  const filteredListings = listings.filter(l => l._status === filter);
+  const filteredListings = listings.filter((l) => {
+    if (filter === 'available') return l._status === 'available';
+    return l._status === 'claimed' || l._status === 'completed';
+  });
   const availableCount = listings.filter(l => l._status === 'available').length;
-  const claimedCount = listings.filter(l => l._status === 'claimed').length;
+  const claimedCount = listings.filter(l => l._status === 'claimed' || l._status === 'completed').length;
 
   return (
     <div className="dashboard-ngo">
@@ -159,6 +231,8 @@ const NGODashboard = () => {
           </button>
         </div>
 
+        {claimError && <div className="alert alert-error show">{claimError}</div>}
+
         {/* Listings grid — now rendered from API data */}
         <div className="listings-grid">
           {loadingListings ? (
@@ -205,7 +279,13 @@ const NGODashboard = () => {
                       Provider #{l.food_provider_id}
                     </div>
                     {l._status === 'available' ? (
-                      <button className="btn btn-sm btn-teal" onClick={() => claimListing(l.id)}>Claim listing</button>
+                      <button
+                        className="btn btn-sm btn-teal"
+                        onClick={() => claimListing(l.id)}
+                        disabled={claimingId === l.id}
+                      >
+                        {claimingId === l.id ? 'Claiming...' : 'Claim listing'}
+                      </button>
                     ) : l._status === 'claimed' ? (
                       <Link to="/chat" className="btn btn-sm" style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}>💬 Chat</Link>
                     ) : (
