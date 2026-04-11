@@ -20,8 +20,10 @@ const FPDashboard = () => {
     qty: '',
     servings: '',
     location: '',
-    from: '18:00',
-    until: '22:00',
+    fromDate: '',
+    fromTime: '18:00',
+    untilDate: '',
+    untilTime: '22:00',
     notes: '',
   });
 
@@ -70,10 +72,10 @@ const FPDashboard = () => {
     setFormData(prev => ({ ...prev, [id]: value }));
   };
 
-  // Build today's date + time string for the API (timezone-naive)
-  const toDatetime = (timeStr) => {
-    const today = new Date().toISOString().split('T')[0]; // "2026-04-05"
-    return `${today}T${timeStr}:00`; // "2026-04-05T18:00:00"
+  // Build date + time string for the API (timezone-naive)
+  const toDatetime = (dateStr, timeStr) => {
+    if (!dateStr || !timeStr) return '';
+    return `${dateStr}T${timeStr}:00`;
   };
 
   // POST /listings with real API call
@@ -115,8 +117,8 @@ const FPDashboard = () => {
     try {
       const body = {
         location: formData.location,
-        available_from: toDatetime(formData.from),
-        available_until: toDatetime(formData.until),
+        available_from: toDatetime(formData.fromDate, formData.fromTime),
+        available_until: toDatetime(formData.untilDate, formData.untilTime),
         notes: formData.notes || null,
         food_items: [
           {
@@ -139,7 +141,41 @@ const FPDashboard = () => {
 
       const data = await res.json();
       if (!res.ok) {
-        const msg = typeof data.detail === 'string' ? data.detail : 'Failed to create listing.';
+        // Try to extract a detailed error message from backend
+        let msg = 'Failed to create listing.';
+        const friendlyMap = [
+          {
+            match: /available_until must be later than available_from/i,
+            text: 'The "Available until" date & time must be after the "Available from" date & time.'
+          },
+          {
+            match: /must be timezone-naive datetimes/i,
+            text: 'Please do not include a timezone in the date & time fields.'
+          },
+          {
+            match: /A listing must include at least one food item/i,
+            text: 'Please enter at least one food name/dish.'
+          },
+          {
+            match: /field required/i,
+            text: 'Please fill in all required fields.'
+          },
+        ];
+        let rawMsg = '';
+        if (typeof data.detail === 'string') {
+          rawMsg = data.detail;
+        } else if (Array.isArray(data.detail)) {
+          rawMsg = data.detail.map(e => e.msg).join(' ');
+        } else if (data.message) {
+          rawMsg = data.message;
+        }
+        for (const rule of friendlyMap) {
+          if (rawMsg && rule.match.test(rawMsg)) {
+            msg = rule.text;
+            break;
+          }
+        }
+        if (msg === 'Failed to create listing.' && rawMsg) msg = rawMsg;
         setError(msg);
         return;
       }
@@ -151,7 +187,7 @@ const FPDashboard = () => {
       // Reset form and refresh listings
       setFormData({
         name: '', qty: '', servings: '', location: '',
-        from: '18:00', until: '22:00', notes: ''
+        fromDate: '', fromTime: '18:00', untilDate: '', untilTime: '22:00', notes: ''
       });
       setImageUrl(null);
       fetchListings();
@@ -354,23 +390,41 @@ const FPDashboard = () => {
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Available from *</label>
+                    <label className="form-label">Available from (date & time) *</label>
                     <input
                       className="form-input"
-                      id="from"
-                      type="time"
-                      value={formData.from}
+                      id="fromDate"
+                      type="date"
+                      value={formData.fromDate}
                       onChange={handleInputChange}
+                      required
+                    />
+                    <input
+                      className="form-input"
+                      id="fromTime"
+                      type="time"
+                      value={formData.fromTime}
+                      onChange={handleInputChange}
+                      required
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Available until *</label>
+                    <label className="form-label">Available until (date & time) *</label>
                     <input
                       className="form-input"
-                      id="until"
-                      type="time"
-                      value={formData.until}
+                      id="untilDate"
+                      type="date"
+                      value={formData.untilDate}
                       onChange={handleInputChange}
+                      required
+                    />
+                    <input
+                      className="form-input"
+                      id="untilTime"
+                      type="time"
+                      value={formData.untilTime}
+                      onChange={handleInputChange}
+                      required
                     />
                   </div>
                 </div>
