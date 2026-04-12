@@ -4,6 +4,8 @@ from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
+ALLOWED_QUANTITY_UNITS = {"kg", "g", "l", "ml"}
+
 
 # ══════════════════════════════════════════
 #  ENUMS (mirror DB enums)
@@ -81,8 +83,53 @@ class FoodItemCreate(BaseModel):
     estimated_serving: Optional[int] = None   # number of people
     image_url:         Optional[str] = None
 
+    @field_validator("estimated_weight")
+    @classmethod
+    def validate_estimated_weight(cls, v):
+        if v is None:
+            return v
 
-class FoodItemResponse(FoodItemCreate):
+        text = v.strip().lower()
+        parts = text.split()
+        if len(parts) != 2:
+            raise ValueError(
+                "estimated_weight must be a positive number followed by a unit (kg, g, l, ml)."
+            )
+
+        amount_text, unit = parts
+
+        try:
+            amount = float(amount_text)
+        except ValueError as exc:
+            raise ValueError(
+                "estimated_weight must be a positive number followed by a unit (kg, g, l, ml)."
+            ) from exc
+
+        if amount <= 0 or unit not in ALLOWED_QUANTITY_UNITS:
+            raise ValueError(
+                "estimated_weight must be a positive number followed by a unit (kg, g, l, ml)."
+            )
+
+        normalized_amount = (
+            str(int(amount)) if amount.is_integer() else str(amount).rstrip("0").rstrip(".")
+        )
+        return f"{normalized_amount} {unit}"
+
+    @field_validator("estimated_serving")
+    @classmethod
+    def validate_estimated_serving(cls, v):
+        if v is None:
+            return v
+        if v <= 0:
+            raise ValueError("estimated_serving must be a positive whole number.")
+        return v
+
+
+class FoodItemResponse(BaseModel):
+    item_name:         str
+    estimated_weight:  Optional[str] = None
+    estimated_serving: Optional[int] = None
+    image_url:         Optional[str] = None
     id:         int
     listing_id: int
 

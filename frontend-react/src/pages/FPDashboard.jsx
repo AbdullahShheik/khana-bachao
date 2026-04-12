@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
 const API = 'http://localhost:8000';
@@ -6,9 +6,12 @@ const API = 'http://localhost:8000';
 const FPDashboard = () => {
   const [user, setUser] = useState({ name: '', role: '' });
   const [listings, setListings] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [listingsLoading, setListingsLoading] = useState(true);
+  const [listingsError, setListingsError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [imageUrl, setImageUrl] = useState(null);
@@ -18,6 +21,7 @@ const FPDashboard = () => {
   const [formData, setFormData] = useState({
     name: '',
     qty: '',
+    qtyUnit: 'kg',
     servings: '',
     location: '',
     fromDate: '',
@@ -36,17 +40,27 @@ const FPDashboard = () => {
   });
 
   // Fetch listings from GET /listings/my
-  const fetchListings = async () => {
+  const fetchListings = useCallback(async () => {
+    setListingsLoading(true);
+    setListingsError('');
     try {
-      const res = await fetch(`${API}/listings/my`, { headers: authHeader() });
+      const res = await fetch(`${API}/listings/my`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('kb_token')}`,
+        },
+      });
       if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
       if (!res.ok) throw new Error('Failed to load listings');
       const data = await res.json();
-      setListings(data);
+      setListings(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('fetchListings error:', err);
+      setListings([]);
+      setListingsError(err.message || 'Failed to load your listings.');
+    } finally {
+      setListingsLoading(false);
     }
-  };
+  }, [navigate]);
 
   useEffect(() => {
     const token = localStorage.getItem('kb_token');
@@ -60,7 +74,7 @@ const FPDashboard = () => {
 
     setUser({ name, role });
     fetchListings();
-  }, [navigate]);
+  }, [navigate, fetchListings]);
 
   const logout = () => {
     localStorage.clear();
@@ -70,6 +84,12 @@ const FPDashboard = () => {
   const handleInputChange = (e) => {
     const { id, value } = e.target;
     setFormData(prev => ({ ...prev, [id]: value }));
+  };
+
+  const preventNonNumericCharacters = (e) => {
+    if (['e', 'E', '+', '-'].includes(e.key)) {
+      e.preventDefault();
+    }
   };
 
   // Build date + time string for the API (timezone-naive)
@@ -115,6 +135,19 @@ const FPDashboard = () => {
     setError('');
 
     try {
+      const quantityValue = Number(formData.qty);
+      const servingsValue = Number(formData.servings);
+
+      if (!Number.isFinite(quantityValue) || quantityValue <= 0) {
+        setError('Estimated quantity must be a positive number.');
+        return;
+      }
+
+      if (!Number.isInteger(servingsValue) || servingsValue <= 0) {
+        setError('Approximate servings must be a positive whole number.');
+        return;
+      }
+
       const body = {
         location: formData.location,
         available_from: toDatetime(formData.fromDate, formData.fromTime),
@@ -123,8 +156,8 @@ const FPDashboard = () => {
         food_items: [
           {
             item_name: formData.name,
-            estimated_weight: formData.qty || null,
-            estimated_serving: formData.servings ? parseInt(formData.servings) : null,
+            estimated_weight: `${quantityValue} ${formData.qtyUnit}`,
+            estimated_serving: servingsValue,
             image_url: imageUrl,
           },
         ],
@@ -160,6 +193,14 @@ const FPDashboard = () => {
             match: /field required/i,
             text: 'Please fill in all required fields.'
           },
+          {
+            match: /estimated_weight must be a positive number followed by a unit/i,
+            text: 'Estimated quantity must be numeric and include a valid unit (kg, g, l, ml).'
+          },
+          {
+            match: /estimated_serving must be a positive whole number/i,
+            text: 'Approximate servings must be a positive whole number.'
+          },
         ];
         let rawMsg = '';
         if (typeof data.detail === 'string') {
@@ -186,7 +227,7 @@ const FPDashboard = () => {
 
       // Reset form and refresh listings
       setFormData({
-        name: '', qty: '', servings: '', location: '',
+        name: '', qty: '', qtyUnit: 'kg', servings: '', location: '',
         fromDate: '', fromTime: '18:00', untilDate: '', untilTime: '22:00', notes: ''
       });
       setImageUrl(null);
@@ -217,6 +258,23 @@ const FPDashboard = () => {
     claimed: listings.filter(l => l.status === 'claimed').length,
     completed: listings.filter(l => l.status === 'completed').length,
   };
+
+  const statusFilters = [
+    { key: 'all', label: 'All', count: stats.total },
+    { key: 'available', label: 'Available', count: stats.available },
+    { key: 'claimed', label: 'Claimed', count: stats.claimed },
+    { key: 'completed', label: 'Completed', count: stats.completed },
+  ];
+
+  const filteredListings = statusFilter === 'all'
+    ? listings
+    : listings.filter((listing) => listing.status === statusFilter);
+
+  const emptyMessage = statusFilter === 'all'
+    ? 'No listings yet. Click "+ Post surplus food" to create your first one!'
+    : `No ${statusFilter} listings yet.`;
+
+  const selectedFilterLabel = statusFilters.find((f) => f.key === statusFilter)?.label || 'All';
 
   return (
     <div className="dashboard-fp">
@@ -264,7 +322,12 @@ const FPDashboard = () => {
             <h1 className="page-title">My Listings</h1>
             <p className="page-subtitle">Manage your surplus food postings</p>
           </div>
-          <button className="btn btn-brand" onClick={() => setShowModal(true)}>+ Post surplus food</button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button className="btn btn-sm" onClick={fetchListings} disabled={listingsLoading}>
+              {listingsLoading ? 'Refreshing...' : 'Refresh'}
+            </button>
+            <button className="btn btn-brand" onClick={() => setShowModal(true)}>+ Post surplus food</button>
+          </div>
         </div>
 
         {/* Stat cards — now computed from real data */}
@@ -275,11 +338,23 @@ const FPDashboard = () => {
           <div className="stat-card"><div className="stat-label">Completed</div><div className="stat-value gray">{stats.completed}</div></div>
         </div>
 
+        <div className="filter-tabs">
+          {statusFilters.map((filter) => (
+            <button
+              key={filter.key}
+              className={`filter-tab ${statusFilter === filter.key ? 'active' : ''}`}
+              onClick={() => setStatusFilter(filter.key)}
+            >
+              {filter.label} <span className="filter-count">{filter.count}</span>
+            </button>
+          ))}
+        </div>
+
         {/* Listings table — now rendered from API data */}
         <div className="card">
           <div className="card-header">
-            <span className="card-title">All listings</span>
-            <button className="btn btn-sm btn-ghost">Export</button>
+            <span className="card-title">{selectedFilterLabel} listings</span>
+            <span className="td-sub">{filteredListings.length} result(s)</span>
           </div>
           <div className="table-wrapper">
             <table>
@@ -295,8 +370,22 @@ const FPDashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {listings.length > 0 ? (
-                  listings.map(listing => (
+                {listingsLoading ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: '#888' }}>
+                      Loading your listings...
+                    </td>
+                  </tr>
+                ) : listingsError ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '24px' }}>
+                      <div className="alert alert-error show" style={{ margin: '0 auto', maxWidth: '520px' }}>
+                        {listingsError}
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredListings.length > 0 ? (
+                  filteredListings.map(listing => (
                     <tr key={listing.id}>
                       <td>
                         <div className="td-food">
@@ -317,7 +406,7 @@ const FPDashboard = () => {
                 ) : (
                   <tr>
                     <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: '#888' }}>
-                      No listings yet. Click "+ Post surplus food" to create your first one!
+                      {emptyMessage}
                     </td>
                   </tr>
                 )}
@@ -353,27 +442,51 @@ const FPDashboard = () => {
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Estimated quantity *</label>
-                    <input
-                      className="form-input"
-                      id="qty"
-                      type="text"
-                      value={formData.qty}
-                      onChange={handleInputChange}
-                      placeholder="e.g. 20 kg"
-                      required
-                    />
+                    <div className="quantity-input-group">
+                      <input
+                        className="form-input"
+                        id="qty"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        inputMode="decimal"
+                        onKeyDown={preventNonNumericCharacters}
+                        value={formData.qty}
+                        onChange={handleInputChange}
+                        placeholder="e.g. 20"
+                        required
+                      />
+                      <select
+                        className="form-select"
+                        id="qtyUnit"
+                        value={formData.qtyUnit}
+                        onChange={handleInputChange}
+                      >
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                        <option value="l">l</option>
+                        <option value="ml">ml</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Approximate servings *</label>
-                    <input
-                      className="form-input"
-                      id="servings"
-                      type="number"
-                      value={formData.servings}
-                      onChange={handleInputChange}
-                      placeholder="e.g. 100"
-                      required
-                    />
+                    <div className="input-with-suffix">
+                      <input
+                        className="form-input"
+                        id="servings"
+                        type="number"
+                        min="1"
+                        step="1"
+                        inputMode="numeric"
+                        onKeyDown={preventNonNumericCharacters}
+                        value={formData.servings}
+                        onChange={handleInputChange}
+                        placeholder="e.g. 100"
+                        required
+                      />
+                      <span className="input-suffix">people</span>
+                    </div>
                   </div>
                 </div>
                 <div className="form-group">
