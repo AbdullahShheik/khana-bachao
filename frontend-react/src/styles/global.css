@@ -189,6 +189,7 @@ h3 {
   padding: 4px 8px;
   border-radius: var(--radius-sm);
   font-family: 'DM Sans', sans-serif;
+  white-space: nowrap;
 }
 
 .btn-logout:hover {
@@ -1346,6 +1347,9 @@ tr:hover td {
 
   .nav-right {
     gap: 8px;
+    margin-left: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .nav-user span {
@@ -1408,7 +1412,32 @@ tr:hover td {
   }
 
   .btn-logout {
-    display: none;
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 4px 10px;
+    border: 0.5px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-secondary);
+  }
+
+  .nav-links {
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .nav-link {
+    white-space: nowrap;
+  }
+
+  .nav-right {
+    width: 100%;
+  }
+
+  .notif-panel {
+    right: 0;
+    width: min(300px, calc(100vw - 24px));
   }
 
   .page-wrapper {
