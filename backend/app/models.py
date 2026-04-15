@@ -1,7 +1,7 @@
 # backend/app/models.py
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime,
-    Enum, ForeignKey, UniqueConstraint, event
+    Enum, ForeignKey, UniqueConstraint, event, Boolean 
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -17,9 +17,14 @@ class FoodProvider(Base):
 
     id            = Column(Integer, primary_key=True, index=True)
     name          = Column(String(120), nullable=False)
-    email         = Column(String(120), unique=True, nullable=True)   # one of email or phone required (enforced in schema)
+    email         = Column(String(120), unique=True, nullable=True) 
     phone         = Column(String(20),  unique=True, nullable=True)
     password_hash = Column(String(255), nullable=False)
+    
+    # --- NEW VERIFICATION FIELDS ---
+    is_verified       = Column(Boolean, default=False)
+    verification_code = Column(String(6), nullable=True)
+    
     created_at    = Column(DateTime, server_default=func.now())
 
     # Relationships
