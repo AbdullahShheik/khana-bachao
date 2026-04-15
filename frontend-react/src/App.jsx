@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './pages/Login';
 import FPDashboard from './pages/FPDashboard';
 import NGODashboard from './pages/NGODashboard';
+import ListingDetail from './pages/ListingDetail';
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/fp/dashboard" element={<FPDashboard />} />
         <Route path="/ngo/dashboard" element={<NGODashboard />} />
+        <Route path="/listings/:id" element={<ListingDetail />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
