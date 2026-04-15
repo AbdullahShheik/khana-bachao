@@ -386,7 +386,7 @@ const FPDashboard = () => {
                   </tr>
                 ) : filteredListings.length > 0 ? (
                   filteredListings.map(listing => (
-                    <tr key={listing.id}>
+                    <tr key={listing.id} onClick={() => navigate(`/listings/${listing.id}`)} style={{ cursor: 'pointer' }}>
                       <td>
                         <div className="td-food">
                           {listing.food_items.map(fi => fi.item_name).join(', ')}

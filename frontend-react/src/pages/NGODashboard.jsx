@@ -250,7 +250,7 @@ const NGODashboard = () => {
               const firstImage = l.food_items.find(fi => fi.image_url)?.image_url;
 
               return (
-                <div key={l.id} className="listing-card">
+                <div key={l.id} className="listing-card" onClick={() => navigate(`/listings/${l.id}`)} style={{ cursor: 'pointer' }}>
                   <div className="listing-card-img">
                     {hasImage ? (
                       <img
