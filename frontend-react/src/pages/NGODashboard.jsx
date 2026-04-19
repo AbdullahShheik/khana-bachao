@@ -114,10 +114,11 @@ const NGODashboard = () => {
         throw new Error(data.detail || 'Failed to claim listing.');
       }
 
+      const chatId = data.chat_id;
       setListings((prev) =>
         prev.map((listing) =>
           listing.id === id
-            ? { ...listing, status: 'claimed', _status: 'claimed' }
+            ? { ...listing, status: 'claimed', _status: 'claimed', chat_id: chatId }
             : listing
         )
       );
@@ -281,13 +282,20 @@ const NGODashboard = () => {
                     {l._status === 'available' ? (
                       <button
                         className="btn btn-sm btn-teal"
-                        onClick={() => claimListing(l.id)}
+                        onClick={(e) => { e.stopPropagation(); claimListing(l.id); }}
                         disabled={claimingId === l.id}
                       >
                         {claimingId === l.id ? 'Claiming...' : 'Claim listing'}
                       </button>
                     ) : l._status === 'claimed' ? (
-                      <Link to="/chat" className="btn btn-sm" style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}>💬 Chat</Link>
+                      <button
+                        className="btn btn-sm"
+                        style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/chat/${l.chat_id}`); }}
+                        disabled={!l.chat_id}
+                      >
+                        💬 Open Chat
+                      </button>
                     ) : (
                       <button className="btn btn-sm btn-ghost" disabled>Completed</button>
                     )}

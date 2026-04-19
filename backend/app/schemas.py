@@ -181,6 +181,8 @@ class ListingResponse(BaseModel):
     notes:           Optional[str]
     created_at:      datetime
     food_items:      List[FoodItemResponse] = []
+    chat_id:         Optional[int] = None
+
 
     class Config:
         from_attributes = True

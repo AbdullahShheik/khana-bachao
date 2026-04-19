@@ -35,7 +35,9 @@ const ListingDetail = () => {
         if (res.status === 403) { setError('You do not have permission to view this listing.'); return; }
         if (res.status === 404) { setError('Listing not found.'); return; }
         if (!res.ok) throw new Error('Failed to load listing');
-        setListing(await res.json());
+        const data = await res.json();
+        setListing(data);
+        setChatId(data.chat_id ?? null);
       } catch (err) {
         setError(err.message);
       } finally {
