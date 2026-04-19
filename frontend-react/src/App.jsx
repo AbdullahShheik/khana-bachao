@@ -13,8 +13,9 @@ function App() {
         <Route path="/fp/dashboard" element={<FPDashboard />} />
         <Route path="/ngo/dashboard" element={<NGODashboard />} />
         <Route path="/listings/:id" element={<ListingDetail />} />
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/chat" element={<ChatWindow />} />
         <Route path="/chat/:chatId" element={<ChatWindow />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
   );

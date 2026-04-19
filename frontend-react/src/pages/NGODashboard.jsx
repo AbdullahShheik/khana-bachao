@@ -10,6 +10,7 @@ const NGODashboard = () => {
   const [filter, setFilter] = useState('available');
   const [showNotif, setShowNotif] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [unreadChats, setUnreadChats] = useState(0);
   const [loadingListings, setLoadingListings] = useState(true);
   const [claimingId, setClaimingId] = useState(null);
   const [claimError, setClaimError] = useState('');
@@ -68,6 +69,22 @@ const NGODashboard = () => {
     }
   };
 
+  const fetchUnreadSummary = async () => {
+    try {
+      const res = await fetch(`${API}/chats/unread-summary`, { headers: authHeader() });
+      if (res.status === 401) {
+        localStorage.clear();
+        navigate('/login');
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      setUnreadChats(Number(data.total_unread_chats) || 0);
+    } catch {
+      // Keep existing value on transient errors.
+    }
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('kb_token');
     const role = localStorage.getItem('kb_role');
@@ -80,6 +97,10 @@ const NGODashboard = () => {
 
     setUser({ name, role });
     fetchListings();
+    fetchUnreadSummary();
+
+    const interval = setInterval(fetchUnreadSummary, 5000);
+    return () => clearInterval(interval);
   }, [navigate]);
 
   const logout = () => {
@@ -173,7 +194,12 @@ const NGODashboard = () => {
 
         <div className="nav-links">
           <Link to="/ngo/dashboard" className="nav-link active">Browse Listings</Link>
-          <Link to="/chat" className="nav-link">Messages</Link>
+          <Link to="/chat" className="nav-link nav-link-with-badge">
+            Messages
+            {unreadChats > 0 && (
+              <span className="nav-unread-badge">{unreadChats > 99 ? '99+' : unreadChats}</span>
+            )}
+          </Link>
         </div>
 
         <div className="nav-right">

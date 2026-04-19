@@ -142,6 +142,7 @@ class Chat(Base):
     claim    = relationship("ListingClaim", back_populates="chat")
     messages = relationship("Message", back_populates="chat", cascade="all, delete-orphan",
                             order_by="Message.sent_at")
+    read_states = relationship("ChatReadState", back_populates="chat", cascade="all, delete-orphan")
 
 
 class Message(Base):
@@ -164,3 +165,25 @@ class Message(Base):
 
     # Relationships
     chat = relationship("Chat", back_populates="messages")
+
+
+class ChatReadState(Base):
+    """
+    Stores per-user read position in each chat.
+    One row per participant (Food Provider / NGO) per chat.
+    """
+    __tablename__ = "chat_read_states"
+
+    id                   = Column(Integer, primary_key=True, index=True)
+    chat_id              = Column(Integer, ForeignKey("chats.id", ondelete="CASCADE"), nullable=False)
+    user_role            = Column(Enum("food_provider", "ngo", name="chat_read_role"), nullable=False)
+    user_id              = Column(Integer, nullable=False)
+    last_read_message_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    updated_at           = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("chat_id", "user_role", "user_id", name="uq_chat_read_states_chat_user"),
+    )
+
+    # Relationships
+    chat = relationship("Chat", back_populates="read_states")

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..auth import decode_token
 from ..database import get_db
-from ..models import Chat, FoodItem, FoodListing, ListingClaim
+from ..models import Chat, ChatReadState, FoodItem, FoodListing, ListingClaim
 from ..schemas import ClaimResponse, ListingCreate, ListingResponse
 
 router = APIRouter(prefix="/listings", tags=["listings"])
@@ -205,6 +205,23 @@ def claim_listing(
         chat = Chat(claim_id=claim.id)
         db.add(chat)
         db.flush()
+
+        db.add(
+            ChatReadState(
+                chat_id=chat.id,
+                user_role="food_provider",
+                user_id=listing.food_provider_id,
+                last_read_message_id=None,
+            )
+        )
+        db.add(
+            ChatReadState(
+                chat_id=chat.id,
+                user_role="ngo",
+                user_id=current_user["id"],
+                last_read_message_id=None,
+            )
+        )
 
         db.commit()
         db.refresh(claim)

@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from .database import engine, Base
 from .routes import auth as auth_router
 from .routes import listings as listings_router
+from .routes import chats as chats_router
 from .routes import upload as upload_router
 
 Base.metadata.create_all(bind=engine)   # creates tables automatically
@@ -26,9 +27,9 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 app.include_router(auth_router.router)
 app.include_router(listings_router.router)
+app.include_router(chats_router.router)
 app.include_router(upload_router.router)
 
 @app.get("/")
 def root():
     return {"message": "Khana Bachao API is running"}
-

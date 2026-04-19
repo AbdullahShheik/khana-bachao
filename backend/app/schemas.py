@@ -221,6 +221,35 @@ class ChatResponse(BaseModel):
         from_attributes = True
 
 
+class ChatThreadResponse(BaseModel):
+    id:                   int
+    listing_id:           int
+    listing_status:       ListingStatus
+    location:             str
+    food_summary:         str
+    counterpart_name:     str
+    message_count:        int
+    unread_count:         int = 0
+    last_message_preview: Optional[str] = None
+    last_message_at:      Optional[datetime] = None
+    created_at:           datetime
+
+
+class ChatDetailResponse(BaseModel):
+    id:                   int
+    listing_id:           int
+    listing_status:       ListingStatus
+    location:             str
+    food_summary:         str
+    food_provider_name:   str
+    ngo_name:             str
+    message_count:        int
+    unread_count:         int = 0
+    last_message_preview: Optional[str] = None
+    last_message_at:      Optional[datetime] = None
+    created_at:           datetime
+
+
 class MessageCreate(BaseModel):
     message_text: str
 
@@ -242,3 +271,8 @@ class MessageResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UnreadSummaryResponse(BaseModel):
+    total_unread_chats:    int
+    total_unread_messages: int
