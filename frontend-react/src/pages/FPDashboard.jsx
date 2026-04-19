@@ -400,7 +400,19 @@ const FPDashboard = () => {
                       <td>{listing.location}</td>
                       <td>{formatTime(listing.available_until)}</td>
                       <td><span className={`badge badge-${listing.status}`}>{listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}</span></td>
-                      <td><button className="btn btn-sm btn-ghost" disabled>No chat yet</button></td>
+                      <td>
+                        {listing.status === 'claimed' && listing.chat_id ? (
+                          <button
+                            className="btn btn-sm"
+                            style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/chat/${listing.chat_id}`); }}
+                          >
+                            💬 Open Chat
+                          </button>
+                        ) : (
+                          <button className="btn btn-sm btn-ghost" disabled>No chat yet</button>
+                        )}
+                      </td>
                     </tr>
                   ))
                 ) : (
