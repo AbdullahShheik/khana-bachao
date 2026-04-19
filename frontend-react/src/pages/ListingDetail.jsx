@@ -11,6 +11,7 @@ const ListingDetail = () => {
   const [error, setError] = useState('');
   const [claiming, setClaiming] = useState(false);
   const [claimSuccess, setClaimSuccess] = useState(false);
+  const [chatId, setChatId] = useState(null); 
 
   const role = localStorage.getItem('kb_role');
   const userName = localStorage.getItem('kb_name') || '';
@@ -58,7 +59,9 @@ const ListingDetail = () => {
         const data = await res.json();
         throw new Error(data.detail || 'Failed to claim listing');
       }
+      const data = await res.json(); 
       setListing(prev => ({ ...prev, status: 'claimed' }));
+      setChatId(data.chat_id);
       setClaimSuccess(true);
       setTimeout(() => setClaimSuccess(false), 4000);
     } catch (err) {
@@ -215,7 +218,13 @@ const ListingDetail = () => {
                 </button>
               )}
               {role === 'ngo' && listing.status === 'claimed' && (
-                <div className="ld-banner claimed">✅ This listing has been claimed.</div>
+                <button
+                  className="btn btn-brand ld-action-btn"
+                  onClick={() => navigate(`/chat/${chatId}`)}
+                  disabled={!chatId}
+                >
+                  💬 Open Chat
+                </button>
               )}
               {role === 'ngo' && listing.status === 'completed' && (
                 <div className="ld-banner completed">✓ This listing has been completed.</div>
