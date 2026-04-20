@@ -10,6 +10,7 @@ const FPDashboard = () => {
   const [showModal, setShowModal] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [unreadChats, setUnreadChats] = useState(0);
   const [listingsLoading, setListingsLoading] = useState(true);
   const [listingsError, setListingsError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -62,6 +63,26 @@ const FPDashboard = () => {
     }
   }, [navigate]);
 
+  const fetchUnreadSummary = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/chats/unread-summary`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('kb_token')}`,
+        },
+      });
+      if (res.status === 401) {
+        localStorage.clear();
+        navigate('/login');
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return;
+      setUnreadChats(Number(data.total_unread_chats) || 0);
+    } catch {
+      // Keep current badge value on transient errors.
+    }
+  }, [navigate]);
+
   useEffect(() => {
     const token = localStorage.getItem('kb_token');
     const role = localStorage.getItem('kb_role');
@@ -74,7 +95,11 @@ const FPDashboard = () => {
 
     setUser({ name, role });
     fetchListings();
-  }, [navigate, fetchListings]);
+    fetchUnreadSummary();
+
+    const interval = setInterval(fetchUnreadSummary, 5000);
+    return () => clearInterval(interval);
+  }, [navigate, fetchListings, fetchUnreadSummary]);
 
   const logout = () => {
     localStorage.clear();
@@ -287,7 +312,12 @@ const FPDashboard = () => {
 
         <div className="nav-links">
           <Link to="/fp/dashboard" className="nav-link active">My Listings</Link>
-          <Link to="/chat" className="nav-link">Messages</Link>
+          <Link to="/chat" className="nav-link nav-link-with-badge">
+            Messages
+            {unreadChats > 0 && (
+              <span className="nav-unread-badge">{unreadChats > 99 ? '99+' : unreadChats}</span>
+            )}
+          </Link>
         </div>
 
         <div className="nav-right">
@@ -400,7 +430,19 @@ const FPDashboard = () => {
                       <td>{listing.location}</td>
                       <td>{formatTime(listing.available_until)}</td>
                       <td><span className={`badge badge-${listing.status}`}>{listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}</span></td>
-                      <td><button className="btn btn-sm btn-ghost" disabled>No chat yet</button></td>
+                      <td>
+                        {listing.status === 'claimed' && listing.chat_id ? (
+                          <button
+                            className="btn btn-sm"
+                            style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/chat/${listing.chat_id}`); }}
+                          >
+                            💬 Open Chat
+                          </button>
+                        ) : (
+                          <button className="btn btn-sm btn-ghost" disabled>No chat yet</button>
+                        )}
+                      </td>
                     </tr>
                   ))
                 ) : (

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..auth import decode_token
 from ..database import get_db
-from ..models import Chat, FoodItem, FoodListing, ListingClaim
+from ..models import Chat, ChatReadState, FoodItem, FoodListing, ListingClaim
 from ..schemas import ClaimResponse, ListingCreate, ListingResponse
 
 router = APIRouter(prefix="/listings", tags=["listings"])
@@ -134,12 +134,18 @@ def get_my_listings(
 ):
     listings = (
         db.query(FoodListing)
-        .options(joinedload(FoodListing.food_items))
+        .options(joinedload(FoodListing.food_items), joinedload(FoodListing.claim).joinedload(ListingClaim.chat))
         .filter(FoodListing.food_provider_id == current_user["id"])
         .order_by(FoodListing.created_at.desc())
         .all()
     )
-    return listings
+    result = []
+    for listing in listings:
+        chat_id = listing.claim.chat.id if listing.claim and listing.claim.chat else None
+        d = ListingResponse.model_validate(listing)
+        d.chat_id = chat_id
+        result.append(d)
+    return result
 
 
 @router.get("/my-claims", response_model=list[ListingResponse])
@@ -150,12 +156,18 @@ def get_my_claimed_listings(
     listings = (
         db.query(FoodListing)
         .join(ListingClaim, ListingClaim.listing_id == FoodListing.id)
-        .options(joinedload(FoodListing.food_items))
+        .options(joinedload(FoodListing.food_items), joinedload(FoodListing.claim).joinedload(ListingClaim.chat))
         .filter(ListingClaim.ngo_id == current_user["id"])
         .order_by(ListingClaim.claimed_at.desc())
         .all()
     )
-    return listings
+    result = []
+    for listing in listings:
+        chat_id = listing.claim.chat.id if listing.claim and listing.claim.chat else None
+        d = ListingResponse.model_validate(listing)
+        d.chat_id = chat_id
+        result.append(d)
+    return result
 
 
 @router.post("/{listing_id}/claim", response_model=ClaimResponse)
@@ -194,6 +206,23 @@ def claim_listing(
         db.add(chat)
         db.flush()
 
+        db.add(
+            ChatReadState(
+                chat_id=chat.id,
+                user_role="food_provider",
+                user_id=listing.food_provider_id,
+                last_read_message_id=None,
+            )
+        )
+        db.add(
+            ChatReadState(
+                chat_id=chat.id,
+                user_role="ngo",
+                user_id=current_user["id"],
+                last_read_message_id=None,
+            )
+        )
+
         db.commit()
         db.refresh(claim)
 
@@ -229,10 +258,14 @@ def get_listing_by_id(
 ):
     listing = (
         db.query(FoodListing)
-        .options(joinedload(FoodListing.food_items))
+        .options(joinedload(FoodListing.food_items), joinedload(FoodListing.claim).joinedload(ListingClaim.chat))
         .filter(FoodListing.id == listing_id)
         .first()
     )
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found.")
-    return listing
+    
+    chat_id = listing.claim.chat.id if listing.claim and listing.claim.chat else None
+    d = ListingResponse.model_validate(listing)
+    d.chat_id = chat_id
+    return d

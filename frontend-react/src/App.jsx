@@ -3,6 +3,7 @@ import Login from './pages/Login';
 import FPDashboard from './pages/FPDashboard';
 import NGODashboard from './pages/NGODashboard';
 import ListingDetail from './pages/ListingDetail';
+import ChatWindow from './pages/ChatWindow';
 
 function App() {
   return (
@@ -12,6 +13,8 @@ function App() {
         <Route path="/fp/dashboard" element={<FPDashboard />} />
         <Route path="/ngo/dashboard" element={<NGODashboard />} />
         <Route path="/listings/:id" element={<ListingDetail />} />
+        <Route path="/chat" element={<ChatWindow />} />
+        <Route path="/chat/:chatId" element={<ChatWindow />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
