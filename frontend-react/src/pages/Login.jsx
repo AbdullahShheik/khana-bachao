@@ -34,7 +34,21 @@ const Login = () => {
     setVerificationCode('');
     setNewPassword('');
   };
-
+  const handleCancelRegistration = async () => {
+    // Only call the API to cancel if they are actually in the registration verification step
+    if (showVerification && isRegister) {
+      try {
+        await fetch(`${API}/auth/cancel-registration`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim() })
+        });
+      } catch (err) {
+        console.error("Failed to cancel registration on server", err);
+      }
+    }
+    resetUIStates(); // Go back to login screen
+  };
   const switchRole = (role) => {
     setCurrentRole(role);
     if (role === 'ngo' && isRegister) setIsRegister(false);
@@ -264,6 +278,7 @@ const Login = () => {
             ) 
             
             /* --- VERIFICATION FLOW --- */
+            /* --- VERIFICATION FLOW --- */
             : showVerification ? (
               <>
                 <div className="form-group">
@@ -276,10 +291,20 @@ const Login = () => {
                 <button className="btn-primary" type="submit" disabled={loading}>
                   {loading ? <span className="spinner"></span> : 'Verify & Login'}
                 </button>
-                <div style={{marginTop: '15px', textAlign: 'center'}}>
-                  <p style={{fontSize: '14px', marginBottom: '5px'}}>Didn't receive the code?</p>
-                  <button type="button" onClick={handleResendCode} disabled={loading} style={{background: 'none', border: 'none', color: '#e65100', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline'}}>
-                    {loading ? 'Sending...' : 'Resend Code'}
+                
+                {/* UPDATED DIV WITH BACK BUTTON */}
+                <div style={{marginTop: '15px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                  <div>
+                    <p style={{fontSize: '14px', marginBottom: '5px'}}>Didn't receive the code?</p>
+                    <button type="button" onClick={handleResendCode} disabled={loading} style={{background: 'none', border: 'none', color: '#e65100', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline'}}>
+                      {loading ? 'Sending...' : 'Resend Code'}
+                    </button>
+                  </div>
+                  
+                  {/* NEW BACK BUTTON */}
+                  {/* NEW BACK BUTTON */}
+                  <button type="button" onClick={handleCancelRegistration} style={{background: 'none', border: 'none', color: '#666', cursor: 'pointer', textDecoration: 'underline', fontSize: '14px'}}>
+                    Cancel / Back to Login
                   </button>
                 </div>
               </>

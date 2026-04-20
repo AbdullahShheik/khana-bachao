@@ -7,20 +7,20 @@ import string
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
+import email.utils
 from ..database import get_db
 from ..models import FoodProvider, NGO
 from ..schemas import FoodProviderRegister, LoginRequest, TokenResponse
 from ..auth import hash_password, verify_password, create_token
-
+import os
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # --- EMAIL CONFIGURATION ---
 # IMPORTANT: In a production app, use environment variables (os.getenv) for these!
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
-SENDER_EMAIL = "hashirbaig526@gmail.com" # Replace with your Gmail
-SENDER_PASSWORD = "vyfi dqxu ihjb axer" # Replace with your 16-character App Password
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
 
 class VerifyRequest(BaseModel):
     email: str
@@ -35,10 +35,15 @@ def generate_otp():
 
 def send_verification_email_real(receiver_email: str, code: str):
     """Sends a real email using SMTP."""
+    """Sends a real email using SMTP."""
     message = MIMEMultipart("alternative")
     message["Subject"] = "Verify your Khana Bachao account"
     message["From"] = f"Khana Bachao <{SENDER_EMAIL}>"
     message["To"] = receiver_email
+    
+    # --- ADD THESE TWO LINES ---
+    message["Message-ID"] = email.utils.make_msgid()
+    message["Date"] = email.utils.formatdate(localtime=True)
 
     # Plain text version
     text = f"Welcome to Khana Bachao!\n\nYour verification code is: {code}\n\nPlease enter this code to complete your registration."
@@ -74,75 +79,89 @@ def send_verification_email_real(receiver_email: str, code: str):
         print(f"Failed to send email: {e}")
         raise HTTPException(status_code=500, detail="Failed to send verification email. Please try again later.")
 
+# Temporary in-memory storage for pending registrations
+pending_registrations = {}
+
+class CancelRegistrationRequest(BaseModel):
+    email: str
+
+# --- Replace your existing endpoints with these ---
+
 @router.post("/register")
 def register(body: FoodProviderRegister, db: Session = Depends(get_db)):
-    # Check existing email
+    # 1. Check if email is already fully registered in the database
     existing_user = db.query(FoodProvider).filter_by(email=body.email).first()
     if existing_user:
-        if existing_user.is_verified:
-            raise HTTPException(400, "Email already registered and verified.")
-        else:
-            # User exists but isn't verified. Update code and resend email.
-            code = generate_otp()
-            existing_user.verification_code = code
-            db.commit()
-            send_verification_email_real(existing_user.email, code)
-            return {"message": "Verification code resent."}
+        raise HTTPException(400, "Email already registered.")
 
+    # 2. Check existing phone
     if body.phone and db.query(FoodProvider).filter_by(phone=body.phone).first():
         raise HTTPException(400, "Phone already registered")
 
-    # Create new unverified user
+    # 3. Create code and store user details in MEMORY (not the database yet)
     code = generate_otp()
-    user = FoodProvider(
-        name=body.name,
-        email=body.email,
-        phone=body.phone,
-        password_hash=hash_password(body.password),
-        is_verified=False,
-        verification_code=code
-    )
-    db.add(user)
-    db.commit()
+    pending_registrations[body.email] = {
+        "name": body.name,
+        "phone": body.phone,
+        "password_hash": hash_password(body.password),
+        "code": code
+    }
     
-    send_verification_email_real(user.email, code)
-    
-    return {"message": "Registration initiated. Please verify your email."}
+    send_verification_email_real(body.email, code)
+    return {"message": "Verification code sent. Complete verification to finish registration."}
+
 
 @router.post("/verify", response_model=TokenResponse)
 def verify_account(body: VerifyRequest, db: Session = Depends(get_db)):
-    user = db.query(FoodProvider).filter_by(email=body.email).first()
-    
-    if not user:
-        raise HTTPException(404, "User not found")
-    if user.is_verified:
-        raise HTTPException(400, "User is already verified")
-    if user.verification_code != body.code:
-        raise HTTPException(400, "Invalid verification code")
+    # 1. Look for the user in our temporary memory
+    if body.email in pending_registrations:
+        pending_user = pending_registrations[body.email]
         
-    # Mark as verified and clear the code
-    user.is_verified = True
-    user.verification_code = None
-    db.commit()
-    
-    # Log them in automatically
-    token = create_token({"sub": str(user.id), "role": "food_provider"})
-    return TokenResponse(access_token=token, role="food_provider", name=user.name)
+        if pending_user["code"] != body.code:
+            raise HTTPException(400, "Invalid verification code")
+            
+        # 2. Code is correct! NOW we save them to the database
+        new_user = FoodProvider(
+            name=pending_user["name"],
+            email=body.email,
+            phone=pending_user["phone"],
+            password_hash=pending_user["password_hash"],
+            is_verified=True,
+            verification_code=None
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        # 3. Clear them from pending memory
+        del pending_registrations[body.email]
+        
+        # 4. Log them in
+        token = create_token({"sub": str(new_user.id), "role": "food_provider"})
+        return TokenResponse(access_token=token, role="food_provider", name=new_user.name)
+        
+    else:
+        raise HTTPException(404, "No pending registration found for this email. Please register again.")
+
 
 @router.post("/resend-code")
 def resend_code(body: ResendRequest, db: Session = Depends(get_db)):
-    user = db.query(FoodProvider).filter_by(email=body.email).first()
-    if not user:
-        raise HTTPException(404, "User not found")
-    if user.is_verified:
-        raise HTTPException(400, "User is already verified")
-        
-    new_code = generate_otp()
-    user.verification_code = new_code
-    db.commit()
-    
-    send_verification_email_real(user.email, new_code)
-    return {"message": "Verification code resent successfully."}
+    # Check memory instead of database for resending codes
+    if body.email in pending_registrations:
+        new_code = generate_otp()
+        pending_registrations[body.email]["code"] = new_code
+        send_verification_email_real(body.email, new_code)
+        return {"message": "Verification code resent successfully."}
+    else:
+        raise HTTPException(404, "No pending registration found.")
+
+
+@router.post("/cancel-registration")
+def cancel_registration(body: CancelRegistrationRequest):
+    # If the user cancels, we simply delete their temporary data
+    if body.email in pending_registrations:
+        del pending_registrations[body.email]
+    return {"message": "Registration cancelled successfully."}
 
 # Add these schemas near the top where your other schemas are:
 class ForgotPasswordRequest(BaseModel):
@@ -220,6 +239,7 @@ def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": "Password reset successfully. You can now log in."}
+
 @router.post("/login", response_model=TokenResponse)
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     if body.role == "food_provider":
