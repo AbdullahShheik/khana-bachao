@@ -24,6 +24,7 @@ class FoodProvider(Base):
     # --- NEW VERIFICATION FIELDS ---
     is_verified       = Column(Boolean, default=False)
     verification_code = Column(String(6), nullable=True)
+    email_notifications = Column(Boolean, default=True, server_default="1")
     
     created_at    = Column(DateTime, server_default=func.now())
 
@@ -44,6 +45,7 @@ class NGO(Base):
         nullable=False,
         default="verified"   # admin pre-registers, so default is verified
     )
+    email_notifications = Column(Boolean, default=True, server_default="1")
     created_at = Column(DateTime, server_default=func.now())
 
     # Relationships

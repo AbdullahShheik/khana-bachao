@@ -17,6 +17,7 @@ const FPDashboard = () => {
   const [error, setError] = useState('');
   const [imageUrl, setImageUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [emailNotifications, setEmailNotifications] = useState(true);
 
   // New listing form state
   const [formData, setFormData] = useState({
@@ -83,6 +84,20 @@ const FPDashboard = () => {
     }
   }, [navigate]);
 
+  const fetchProfile = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/auth/me`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('kb_token')}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEmailNotifications(data.email_notifications);
+      }
+    } catch (err) {
+      console.error('Failed to fetch profile:', err);
+    }
+  }, []);
+
   useEffect(() => {
     const token = localStorage.getItem('kb_token');
     const role = localStorage.getItem('kb_role');
@@ -96,10 +111,27 @@ const FPDashboard = () => {
     setUser({ name, role });
     fetchListings();
     fetchUnreadSummary();
+    fetchProfile();
 
     const interval = setInterval(fetchUnreadSummary, 5000);
     return () => clearInterval(interval);
-  }, [navigate, fetchListings, fetchUnreadSummary]);
+  }, [navigate, fetchListings, fetchUnreadSummary, fetchProfile]);
+
+  const toggleNotifications = async () => {
+    const newVal = !emailNotifications;
+    try {
+      const res = await fetch(`${API}/auth/notifications`, {
+        method: 'PATCH',
+        headers: authHeader(),
+        body: JSON.stringify({ enabled: newVal }),
+      });
+      if (res.ok) {
+        setEmailNotifications(newVal);
+      }
+    } catch (err) {
+      console.error('Failed to update notifications:', err);
+    }
+  };
 
   const logout = () => {
     localStorage.clear();
@@ -321,6 +353,22 @@ const FPDashboard = () => {
         </div>
 
         <div className="nav-right">
+          <button 
+            className={`notif-toggle-btn ${emailNotifications ? 'active' : ''}`} 
+            onClick={toggleNotifications}
+            title={emailNotifications ? 'Disable Email Notifications' : 'Enable Email Notifications'}
+            style={{ 
+              background: 'none', 
+              border: 'none', 
+              fontSize: '1.2rem', 
+              cursor: 'pointer',
+              marginRight: '15px',
+              opacity: emailNotifications ? 1 : 0.5,
+              transition: 'opacity 0.2s'
+            }}
+          >
+            {emailNotifications ? '✉️' : '🚫'}
+          </button>
           <button className="notif-btn" onClick={() => setShowNotif(!showNotif)}>
             🔔
             <span className="notif-dot"></span>

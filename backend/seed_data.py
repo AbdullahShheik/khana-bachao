@@ -35,12 +35,12 @@ def seed_food_providers(db):
 def seed_ngos(db):
     """Adds a sample NGO to the database."""
     print("🤝 Checking for sample NGO...")
-    ngo = db.query(NGO).filter_by(email="ngo@test.com").first()
+    ngo = db.query(NGO).filter_by(email="tz09220@st.habib.edu.pk").first()
     if not ngo:
         ngo = NGO(
-            ngo_name="Saylani Welfare",
-            email="ngo@test.com",
-            phone="03217654321",
+            ngo_name="JDC Welfare",
+            email="tz09220@st.habib.edu.pk",
+            phone="03212141483",
             password_hash=hash_password("password123"),
             verification_status="verified"
         )

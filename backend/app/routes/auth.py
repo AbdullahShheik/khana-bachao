@@ -11,9 +11,26 @@ import email.utils
 from ..database import get_db
 from ..models import FoodProvider, NGO
 from ..schemas import FoodProviderRegister, LoginRequest, TokenResponse
-from ..auth import hash_password, verify_password, create_token
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from ..auth import hash_password, verify_password, create_token, decode_token
 import os
 router = APIRouter(prefix="/auth", tags=["auth"])
+bearer_scheme = HTTPBearer(auto_error=False)
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+) -> dict:
+    if not credentials or not credentials.credentials:
+        raise HTTPException(status_code=401, detail="Authorization token is required.")
+    payload = decode_token(credentials.credentials)
+    user_id = payload.get("sub")
+    role = payload.get("role")
+    if user_id is None or role is None:
+        raise HTTPException(status_code=401, detail="Token payload is invalid.")
+    return {"id": int(user_id), "role": role}
+
+class NotificationUpdate(BaseModel):
+    enabled: bool
 
 # --- EMAIL CONFIGURATION ---
 # IMPORTANT: In a production app, use environment variables (os.getenv) for these!
@@ -255,3 +272,40 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     name = user.name if hasattr(user, "name") else user.ngo_name
     token = create_token({"sub": str(user.id), "role": body.role})
     return TokenResponse(access_token=token, role=body.role, name=name)
+
+@router.get("/me")
+def get_me(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if current_user["role"] == "food_provider":
+        user = db.query(FoodProvider).filter_by(id=current_user["id"]).first()
+    else:
+        user = db.query(NGO).filter_by(id=current_user["id"]).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    name = user.name if hasattr(user, "name") else user.ngo_name
+    return {
+        "id": user.id,
+        "name": name,
+        "email": user.email,
+        "role": current_user["role"],
+        "email_notifications": user.email_notifications
+    }
+
+@router.patch("/notifications")
+def update_notifications(
+    body: NotificationUpdate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    if current_user["role"] == "food_provider":
+        user = db.query(FoodProvider).filter_by(id=current_user["id"]).first()
+    else:
+        user = db.query(NGO).filter_by(id=current_user["id"]).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.email_notifications = body.enabled
+    db.commit()
+    return {"message": "Notification preferences updated", "enabled": user.email_notifications}

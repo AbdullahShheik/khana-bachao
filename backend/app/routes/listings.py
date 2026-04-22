@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..auth import decode_token
 from ..database import get_db
-from ..models import Chat, ChatReadState, FoodItem, FoodListing, ListingClaim
+from ..models import Chat, ChatReadState, FoodItem, FoodListing, FoodProvider, ListingClaim, NGO
 from ..schemas import ClaimResponse, ListingCreate, ListingResponse
+from ..email_service import send_new_listing_notification, send_claim_notification
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -108,6 +109,27 @@ def create_listing(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Listing created but failed to load response.",
         )
+
+    # --- Notify all NGOs with email_notifications enabled ---
+    try:
+        ngos = db.query(NGO).filter(NGO.email_notifications == True).all()
+        fp = db.query(FoodProvider).filter(FoodProvider.id == current_user["id"]).first()
+        provider_name = fp.name if fp else "A food provider"
+        item_names = [fi.item_name for fi in created_listing.food_items]
+        avail_until = str(created_listing.available_until)
+        for ngo in ngos:
+            if ngo.email:
+                send_new_listing_notification(
+                    ngo_email=ngo.email,
+                    ngo_name=ngo.ngo_name,
+                    listing_id=created_listing.id,
+                    food_items=item_names,
+                    location=created_listing.location,
+                    available_until=avail_until,
+                    provider_name=provider_name,
+                )
+    except Exception as e:
+        print(f"[listings] Failed to send new-listing notifications: {e}")
 
     return created_listing
 
@@ -225,6 +247,25 @@ def claim_listing(
 
         db.commit()
         db.refresh(claim)
+
+        # --- Notify the Food Provider ---
+        try:
+            fp = db.query(FoodProvider).filter(FoodProvider.id == listing.food_provider_id).first()
+            ngo = db.query(NGO).filter(NGO.id == current_user["id"]).first()
+            if fp and fp.email and fp.email_notifications:
+                item_names = [fi.item_name for fi in (
+                    db.query(FoodItem).filter(FoodItem.listing_id == listing.id).all()
+                )]
+                send_claim_notification(
+                    fp_email=fp.email,
+                    fp_name=fp.name,
+                    listing_id=listing.id,
+                    food_items=item_names,
+                    location=listing.location,
+                    ngo_name=ngo.ngo_name if ngo else "An NGO",
+                )
+        except Exception as e:
+            print(f"[listings] Failed to send claim notification: {e}")
 
         return ClaimResponse(
             id=claim.id,
