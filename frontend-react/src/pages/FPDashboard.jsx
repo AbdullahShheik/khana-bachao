@@ -308,12 +308,15 @@ const FPDashboard = () => {
     return d.toLocaleString('en-PK', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   };
 
+  const now = new Date();
+
   // Compute stats from real data
   const stats = {
     total: listings.length,
-    available: listings.filter(l => l.status === 'available').length,
+    available: listings.filter(l => l.status === 'available' && new Date(l.available_until) > now).length,
     claimed: listings.filter(l => l.status === 'claimed').length,
     completed: listings.filter(l => l.status === 'completed').length,
+    expired: listings.filter(l => l.status === 'available' && new Date(l.available_until) <= now).length,
   };
 
   const statusFilters = [
@@ -321,11 +324,16 @@ const FPDashboard = () => {
     { key: 'available', label: 'Available', count: stats.available },
     { key: 'claimed', label: 'Claimed', count: stats.claimed },
     { key: 'completed', label: 'Completed', count: stats.completed },
+    { key: 'expired', label: 'Expired', count: stats.expired },
   ];
 
   const filteredListings = statusFilter === 'all'
     ? listings
-    : listings.filter((listing) => listing.status === statusFilter);
+    : statusFilter === 'available'
+      ? listings.filter((l) => l.status === 'available' && new Date(l.available_until) > now)
+      : statusFilter === 'expired'
+        ? listings.filter((l) => l.status === 'available' && new Date(l.available_until) <= now)
+        : listings.filter((listing) => listing.status === statusFilter);
 
   const emptyMessage = statusFilter === 'all'
     ? 'No listings yet. Click "+ Post surplus food" to create your first one!'
@@ -414,6 +422,7 @@ const FPDashboard = () => {
           <div className="stat-card"><div className="stat-label">Available</div><div className="stat-value teal">{stats.available}</div></div>
           <div className="stat-card"><div className="stat-label">Claimed</div><div className="stat-value amber">{stats.claimed}</div></div>
           <div className="stat-card"><div className="stat-label">Completed</div><div className="stat-value gray">{stats.completed}</div></div>
+          <div className="stat-card"><div className="stat-label">Expired</div><div className="stat-value red">{stats.expired}</div></div>
         </div>
 
         <div className="filter-tabs">
@@ -477,7 +486,16 @@ const FPDashboard = () => {
                       <td>{listing.food_items[0]?.estimated_serving || '—'}</td>
                       <td>{listing.location}</td>
                       <td>{formatTime(listing.available_until)}</td>
-                      <td><span className={`badge badge-${listing.status}`}>{listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}</span></td>
+                      <td>
+                        <span className={`badge badge-${
+                          (listing.status === 'available' && new Date(listing.available_until) <= now) ? 'expired' : listing.status
+                        }`}>
+                          {(listing.status === 'available' && new Date(listing.available_until) <= now) 
+                            ? 'Expired' 
+                            : listing.status.charAt(0).toUpperCase() + listing.status.slice(1)
+                          }
+                        </span>
+                      </td>
                       <td>
                         {listing.status === 'claimed' && listing.chat_id ? (
                           <button
