@@ -18,6 +18,9 @@ const FPDashboard = () => {
   const [imageUrl, setImageUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
 
   // New listing form state
   const [formData, setFormData] = useState({
@@ -63,6 +66,31 @@ const FPDashboard = () => {
       setListingsLoading(false);
     }
   }, [navigate]);
+
+  const deleteListing = async (id) => {
+    setDeleteTargetId(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    setShowDeleteConfirm(false);
+    setDeletingId(deleteTargetId);
+    try {
+      const res = await fetch(`${API}/listings/${deleteTargetId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${localStorage.getItem('kb_token')}` },
+      });
+      if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
+      if (res.status === 409) { alert('Only available listings can be deleted.'); return; }
+      if (!res.ok) throw new Error('Failed to delete listing.');
+      setListings(prev => prev.filter(l => l.id !== deleteTargetId));
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setDeletingId(null);
+      setDeleteTargetId(null);
+    }
+  };
 
   const fetchUnreadSummary = useCallback(async () => {
     try {
@@ -496,19 +524,28 @@ const FPDashboard = () => {
                           }
                         </span>
                       </td>
-                      <td>
-                        {listing.status === 'claimed' && listing.chat_id ? (
-                          <button
-                            className="btn btn-sm"
-                            style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}
-                            onClick={(e) => { e.stopPropagation(); navigate(`/chat/${listing.chat_id}`); }}
-                          >
-                            💬 Open Chat
-                          </button>
-                        ) : (
-                          <button className="btn btn-sm btn-ghost" disabled>No chat yet</button>
-                        )}
-                      </td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                      {listing.status === 'claimed' && listing.chat_id ? (
+                        <button
+                          className="btn btn-sm"
+                          style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}
+                          onClick={() => navigate(`/chat/${listing.chat_id}`)}
+                        >
+                          💬 Open Chat
+                        </button>
+                      ) : listing.status === 'available' ? (
+                        <button
+                          className="btn btn-sm btn-ghost"
+                          style={{ color: 'crimson', borderColor: 'crimson' }}
+                          onClick={() => deleteListing(listing.id)}
+                          disabled={deletingId === listing.id}
+                        >
+                          {deletingId === listing.id ? 'Deleting...' : '🗑 Delete'}
+                        </button>
+                      ) : (
+                        <button className="btn btn-sm btn-ghost" disabled>No action</button>
+                      )}
+                    </td>
                     </tr>
                   ))
                 ) : (
@@ -702,6 +739,32 @@ const FPDashboard = () => {
       {/* TOAST */}
       {showToast && (
         <div className="success-toast show">✓ Listing posted! NGOs have been notified.</div>
+      )}
+      {/* DELETE CONFIRMATION MODAL */}
+      {showDeleteConfirm && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2 className="modal-title">🗑 Delete Listing</h2>
+              <button className="modal-close" onClick={() => setShowDeleteConfirm(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                Are you sure you want to delete this listing? This action <strong>cannot be undone</strong>.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+              <button
+                className="btn btn-brand"
+                style={{ background: 'crimson', borderColor: 'crimson' }}
+                onClick={confirmDelete}
+              >
+                Yes, delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
