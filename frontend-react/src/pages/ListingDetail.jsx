@@ -161,11 +161,11 @@ const ListingDetail = () => {
             )}
             {/* Status + time overlay */}
             <div className="ld-hero-overlay">
-              <span className={`badge badge-${listing.status}`}>
-                {listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}
+              <span className={`badge badge-${listing.status === 'available' && new Date(listing.available_until) <= new Date() ? 'expired' : listing.status}`}>
+                {listing.status === 'available' && new Date(listing.available_until) <= new Date() ? 'Expired' : listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}
               </span>
-              {timeInfo && (
-                <span className={`ld-time-pill ${timeInfo.urgent ? 'urgent' : ''}`}>
+              {timeInfo && !timeInfo.urgent && (
+                <span className="ld-time-pill">
                   ⏱ {timeInfo.text}
                 </span>
               )}
