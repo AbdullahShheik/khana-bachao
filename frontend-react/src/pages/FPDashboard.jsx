@@ -222,6 +222,9 @@ const FPDashboard = () => {
     try {
       const quantityValue = Number(formData.qty);
       const servingsValue = Number(formData.servings);
+      const fromDatetimeStr = toDatetime(formData.fromDate, formData.fromTime);
+      const untilDatetimeStr = toDatetime(formData.untilDate, formData.untilTime);
+      const nowLocal = new Date();
 
       if (!Number.isFinite(quantityValue) || quantityValue <= 0) {
         setError('Estimated quantity must be a positive number.');
@@ -233,10 +236,22 @@ const FPDashboard = () => {
         return;
       }
 
+      if (fromDatetimeStr) {
+        const fromDate = new Date(fromDatetimeStr);
+        if (Number.isNaN(fromDate.getTime())) {
+          setError('Please enter a valid "Available from" date and time.');
+          return;
+        }
+        if (fromDate < nowLocal) {
+          setError('The "Available from" time must be now or later.');
+          return;
+        }
+      }
+
       const body = {
         location: formData.location,
-        available_from: toDatetime(formData.fromDate, formData.fromTime),
-        available_until: toDatetime(formData.untilDate, formData.untilTime),
+        available_from: fromDatetimeStr,
+        available_until: untilDatetimeStr,
         notes: formData.notes || null,
         food_items: [
           {
@@ -265,6 +280,10 @@ const FPDashboard = () => {
           {
             match: /available_until must be later than available_from/i,
             text: 'The "Available until" date & time must be after the "Available from" date & time.'
+          },
+          {
+            match: /available_from must be greater than or equal to the current time/i,
+            text: 'The "Available from" time must be now or later.'
           },
           {
             match: /must be timezone-naive datetimes/i,
