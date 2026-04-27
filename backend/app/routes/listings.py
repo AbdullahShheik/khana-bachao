@@ -310,3 +310,31 @@ def get_listing_by_id(
     d = ListingResponse.model_validate(listing)
     d.chat_id = chat_id
     return d
+
+@router.delete("/{listing_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_listing(
+    listing_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_food_provider),
+):
+    listing = (
+        db.query(FoodListing)
+        .filter(FoodListing.id == listing_id)
+        .first()
+    )
+
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found.")
+
+    if listing.food_provider_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You can only delete your own listings.")
+
+    if listing.status != "available":
+        raise HTTPException(status_code=409, detail="Only available listings can be deleted.")
+
+    try:
+        db.delete(listing)
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete listing.")
