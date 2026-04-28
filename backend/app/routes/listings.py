@@ -1,5 +1,6 @@
 # backend/app/routes/listings.py
 from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session, joinedload
@@ -139,10 +140,12 @@ def get_available_listings(
     db: Session = Depends(get_db),
     _: dict = Depends(require_ngo),
 ):
+    now = datetime.utcnow()
     listings = (
         db.query(FoodListing)
         .options(joinedload(FoodListing.food_items))
         .filter(FoodListing.status == "available")
+        .filter(FoodListing.available_until > now)
         .order_by(FoodListing.created_at.desc())
         .all()
     )
