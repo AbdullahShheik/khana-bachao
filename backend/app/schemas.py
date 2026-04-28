@@ -176,6 +176,20 @@ class ListingCreate(BaseModel):
             raise ValueError("available_until must be later than available_from.")
         return self
 
+class ListingUpdate(BaseModel):
+    location:        Optional[str] = None
+    available_from:  Optional[datetime] = None
+    available_until: Optional[datetime] = None
+    notes:           Optional[str] = None
+    food_items:      Optional[List[FoodItemCreate]] = None
+
+    @model_validator(mode="after")
+    def validate_time_window(self):
+        if self.available_from and self.available_until:
+            if self.available_until <= self.available_from:
+                raise ValueError("available_until must be later than available_from.")
+        return self
+
 
 class ListingResponse(BaseModel):
     id:              int
