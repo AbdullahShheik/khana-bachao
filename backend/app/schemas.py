@@ -1,6 +1,6 @@
 # backend/app/schemas.py
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
 from enum import Enum
 
@@ -35,12 +35,20 @@ class FoodProviderRegister(BaseModel):
     email:    Optional[EmailStr] = None
     phone:    Optional[str]      = None
     password: str
+    preferred_verification_method: Optional[Literal['email', 'whatsapp']] = None
 
     @model_validator(mode="after")
     def email_or_phone_required(self):
         """SRS: Food Provider registers with email OR WhatsApp phone number."""
-        if not self.email and not self.phone:
+        has_email = bool(self.email and str(self.email).strip())
+        has_phone = bool(self.phone and str(self.phone).strip())
+        
+        if not has_email and not has_phone:
             raise ValueError("At least one of email or phone number is required.")
+            
+        if has_email and has_phone and not self.preferred_verification_method:
+            raise ValueError("preferred_verification_method is required when both email and phone are provided.")
+            
         return self
 
 
@@ -54,9 +62,9 @@ class NGOCreate(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email:    EmailStr
-    password: str
-    role:     str   # "food_provider" or "ngo"
+    identifier: str
+    password:   str
+    role:       str   # "food_provider" or "ngo"
 
     @field_validator("role")
     @classmethod

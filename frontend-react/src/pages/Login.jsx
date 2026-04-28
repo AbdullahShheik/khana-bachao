@@ -13,10 +13,12 @@ const Login = () => {
   const [forgotPassStep, setForgotPassStep] = useState(1); // 1 = Ask Email, 2 = Ask OTP & New Pass
   const [newPassword, setNewPassword] = useState('');
   
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState(''); // NEW for login and forgot pass
+  const [email, setEmail] = useState(''); // Now only for registration
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [preferredMethod, setPreferredMethod] = useState('');
   const [verificationCode, setVerificationCode] = useState(''); 
   
   const [error, setError] = useState('');
@@ -41,7 +43,7 @@ const Login = () => {
         await fetch(`${API}/auth/cancel-registration`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email.trim() })
+          body: JSON.stringify({ identifier: identifier.trim() })
         });
       } catch (err) {
         console.error("Failed to cancel registration on server", err);
@@ -117,7 +119,7 @@ const Login = () => {
     const res = await fetch(`${API}/auth/forgot-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim() }),
+      body: JSON.stringify({ email: identifier.trim() }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Failed to request reset');
@@ -131,7 +133,7 @@ const Login = () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        email: email.trim(),
+        email: identifier.trim(),
         code: verificationCode.trim(),
         new_password: newPassword
       }),
@@ -145,16 +147,30 @@ const Login = () => {
 
   // ... (Keep doRegister, doVerify, handleResendCode, doLogin, saveSession exactly the same as before) ...
   const doRegister = async () => {
-    const body = { name: name.trim(), email: email.trim(), phone: phone.trim() || null, password };
+    if (!email.trim() && !phone.trim()) {
+      throw new Error("Please provide an email or WhatsApp number.");
+    }
+    if (email.trim() && phone.trim() && !preferredMethod) {
+      throw new Error("Please select your preferred verification method.");
+    }
+
+    const body = { 
+      name: name.trim(), 
+      email: email.trim() || null, 
+      phone: phone.trim() || null, 
+      password,
+      preferred_verification_method: (email.trim() && phone.trim()) ? preferredMethod : null
+    };
     const res = await fetch(`${API}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Registration failed');
+    setIdentifier(email.trim() || phone.trim());
     setShowVerification(true);
-    setSuccessMsg('Verification code sent! Please check your email inbox.');
+    setSuccessMsg('Verification code sent!');
   };
 
   const doVerify = async () => {
-    const body = { email: email.trim(), code: verificationCode.trim() };
+    const body = { identifier: identifier.trim(), code: verificationCode.trim() };
     const res = await fetch(`${API}/auth/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Verification failed');
@@ -165,15 +181,15 @@ const Login = () => {
   const handleResendCode = async () => {
     setError(''); setSuccessMsg(''); setLoading(true);
     try {
-      const res = await fetch(`${API}/auth/resend-code`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim() }) });
+      const res = await fetch(`${API}/auth/resend-code`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier: identifier.trim() }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to resend code');
-      setSuccessMsg('A new code has been sent to your email.');
+      setSuccessMsg('A new code has been sent.');
     } catch (err) { setError(err.message); } finally { setLoading(false); }
   };
 
   const doLogin = async () => {
-    const body = { email: email.trim(), password, role: currentRole === 'fp' ? 'food_provider' : 'ngo' };
+    const body = { identifier: identifier.trim(), password, role: currentRole === 'fp' ? 'food_provider' : 'ngo' };
     const res = await fetch(`${API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Invalid credentials');
@@ -242,7 +258,7 @@ const Login = () => {
                 <div className="form-group">
                   <label className="form-label">Email address</label>
                   <input
-                    className="form-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                    className="form-input" type="email" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
                     placeholder="you@example.com" required disabled={forgotPassStep === 2}
                   />
                 </div>
@@ -320,7 +336,11 @@ const Login = () => {
                       <input className="form-input" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Al-Karim Wedding Hall" required />
                     </div>
                     <div className="form-group">
-                      <label className="form-label">WhatsApp / Phone number</label>
+                      <label className="form-label">Email address (Optional)</label>
+                      <input className="form-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">WhatsApp / Phone number (Optional)</label>
                       <input
                         className="form-input"
                         type="tel"
@@ -332,13 +352,30 @@ const Login = () => {
                         title="Phone number must start with 03 and be exactly 11 digits long"
                       />
                     </div>
+                    {email.trim() && phone.trim() && (
+                      <div className="form-group">
+                        <label className="form-label">How would you like to receive your verification code?</label>
+                        <div style={{ display: 'flex', gap: '15px', marginTop: '5px' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '14px' }}>
+                            <input type="radio" name="preferredMethod" value="email" checked={preferredMethod === 'email'} onChange={(e) => setPreferredMethod(e.target.value)} />
+                            Email
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '14px' }}>
+                            <input type="radio" name="preferredMethod" value="whatsapp" checked={preferredMethod === 'whatsapp'} onChange={(e) => setPreferredMethod(e.target.value)} />
+                            WhatsApp
+                          </label>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                <div className="form-group">
-                  <label className="form-label">Email address</label>
-                  <input className="form-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
-                </div>
+                {!isRegister && (
+                  <div className="form-group">
+                    <label className="form-label">Email or WhatsApp Number</label>
+                    <input className="form-input" type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="you@example.com or 03XXXXXXXXX" required />
+                  </div>
+                )}
                 
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
