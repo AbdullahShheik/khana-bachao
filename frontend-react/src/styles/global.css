@@ -757,6 +757,12 @@ h3 {
   color: #0A5C42;
 }
 
+.badge-expired {
+  background: var(--red-light);
+  color: var(--red);
+}
+
+
 .badge-claimed {
   background: var(--amber-light);
   color: #7A4A0A;

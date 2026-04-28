@@ -174,8 +174,28 @@ class ListingCreate(BaseModel):
             raise ValueError(
                 "available_from and available_until must be timezone-naive datetimes."
             )
+        if self.available_from:
+            now = datetime.now()
+            if self.available_from < now:
+                raise ValueError(
+                    "available_from must be greater than or equal to the current time."
+                )
         if self.available_from and self.available_until <= self.available_from:
             raise ValueError("available_until must be later than available_from.")
+        return self
+
+class ListingUpdate(BaseModel):
+    location:        Optional[str] = None
+    available_from:  Optional[datetime] = None
+    available_until: Optional[datetime] = None
+    notes:           Optional[str] = None
+    food_items:      Optional[List[FoodItemCreate]] = None
+
+    @model_validator(mode="after")
+    def validate_time_window(self):
+        if self.available_from and self.available_until:
+            if self.available_until <= self.available_from:
+                raise ValueError("available_until must be later than available_from.")
         return self
 
 

@@ -11,7 +11,7 @@ const ListingDetail = () => {
   const [error, setError] = useState('');
   const [claiming, setClaiming] = useState(false);
   const [claimSuccess, setClaimSuccess] = useState(false);
-  const [chatId, setChatId] = useState(null); 
+  const [chatId, setChatId] = useState(null);
 
   const role = localStorage.getItem('kb_role');
   const userName = localStorage.getItem('kb_name') || '';
@@ -61,7 +61,7 @@ const ListingDetail = () => {
         const data = await res.json();
         throw new Error(data.detail || 'Failed to claim listing');
       }
-      const data = await res.json(); 
+      const data = await res.json();
       setListing(prev => ({ ...prev, status: 'claimed' }));
       setChatId(data.chat_id);
       setClaimSuccess(true);
@@ -70,6 +70,26 @@ const ListingDetail = () => {
       setError(err.message);
     } finally {
       setClaiming(false);
+    }
+  };
+
+  const handleComplete = async () => {
+    if (!window.confirm('Are you sure the pickup is done?')) return;
+    try {
+      const res = await fetch(`${API}/listings/${id}/status`, {
+        method: 'PATCH',
+        headers: { ...authHeader(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'completed' }),
+      });
+      if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to update status');
+      }
+      const data = await res.json();
+      setListing(data);
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -161,11 +181,11 @@ const ListingDetail = () => {
             )}
             {/* Status + time overlay */}
             <div className="ld-hero-overlay">
-              <span className={`badge badge-${listing.status}`}>
-                {listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}
+              <span className={`badge badge-${listing.status === 'available' && new Date(listing.available_until) <= new Date() ? 'expired' : listing.status}`}>
+                {listing.status === 'available' && new Date(listing.available_until) <= new Date() ? 'Expired' : listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}
               </span>
-              {timeInfo && (
-                <span className={`ld-time-pill ${timeInfo.urgent ? 'urgent' : ''}`}>
+              {timeInfo && !timeInfo.urgent && (
+                <span className="ld-time-pill">
                   ⏱ {timeInfo.text}
                 </span>
               )}
@@ -230,6 +250,11 @@ const ListingDetail = () => {
               )}
               {role === 'ngo' && listing.status === 'completed' && (
                 <div className="ld-banner completed">✓ This listing has been completed.</div>
+              )}
+              {isOwner && listing.status === 'claimed' && (
+                <button className="btn btn-brand ld-action-btn" onClick={handleComplete}>
+                  ✓ Mark as Completed
+                </button>
               )}
               {isOwner && (
                 <Link to={dashboardPath} className="btn ld-action-btn">← Back to My Listings</Link>

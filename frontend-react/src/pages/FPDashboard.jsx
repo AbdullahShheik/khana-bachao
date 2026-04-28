@@ -18,6 +18,18 @@ const FPDashboard = () => {
   const [imageUrl, setImageUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [editingListing, setEditingListing] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: '', qty: '', qtyUnit: 'kg', servings: '',
+    location: '', fromDate: '', fromTime: '18:00',
+    untilDate: '', untilTime: '22:00', notes: '',
+  });
+  const [editError, setEditError] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
 
   // New listing form state
   const [formData, setFormData] = useState({
@@ -63,6 +75,110 @@ const FPDashboard = () => {
       setListingsLoading(false);
     }
   }, [navigate]);
+
+  const deleteListing = async (id) => {
+    setDeleteTargetId(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const openEditModal = (listing) => {
+    const fi = listing.food_items[0] || {};
+    const weightParts = fi.estimated_weight ? fi.estimated_weight.split(' ') : ['', 'kg'];
+    const fromDt = listing.available_from ? new Date(listing.available_from) : null;
+    const untilDt = new Date(listing.available_until);
+    const toDateStr = (d) => d ? d.toISOString().slice(0, 10) : '';
+    const toTimeStr = (d) => d ? d.toTimeString().slice(0, 5) : '18:00';
+    setEditingListing(listing);
+    setEditFormData({
+      name: fi.item_name || '',
+      qty: weightParts[0] || '',
+      qtyUnit: weightParts[1] || 'kg',
+      servings: fi.estimated_serving || '',
+      location: listing.location || '',
+      fromDate: toDateStr(fromDt),
+      fromTime: toTimeStr(fromDt),
+      untilDate: toDateStr(untilDt),
+      untilTime: toTimeStr(untilDt),
+      notes: listing.notes || '',
+    });
+    setEditError('');
+    setShowEditModal(true);
+  };
+
+  const submitEdit = async (e) => {
+    e.preventDefault();
+    setEditLoading(true);
+    setEditError('');
+    try {
+      const body = {
+        location: editFormData.location,
+        available_from: `${editFormData.fromDate}T${editFormData.fromTime}:00`,
+        available_until: `${editFormData.untilDate}T${editFormData.untilTime}:00`,
+        notes: editFormData.notes || null,
+        food_items: [{
+          item_name: editFormData.name,
+          estimated_weight: `${editFormData.qty} ${editFormData.qtyUnit}`,
+          estimated_serving: Number(editFormData.servings),
+          image_url: editingListing.food_items[0]?.image_url || null,
+        }],
+      };
+      const res = await fetch(`${API}/listings/${editingListing.id}`, {
+        method: 'PATCH',
+        headers: authHeader(),
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
+      if (!res.ok) throw new Error(data.detail || 'Failed to update listing.');
+      setListings(prev => prev.map(l => l.id === editingListing.id ? data : l));
+      setShowEditModal(false);
+      setEditingListing(null);
+    } catch (err) {
+      setEditError(err.message);
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    setShowDeleteConfirm(false);
+    setDeletingId(deleteTargetId);
+    try {
+      const res = await fetch(`${API}/listings/${deleteTargetId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${localStorage.getItem('kb_token')}` },
+      });
+      if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
+      if (res.status === 409) { alert('Only available listings can be deleted.'); return; }
+      if (!res.ok) throw new Error('Failed to delete listing.');
+      setListings(prev => prev.filter(l => l.id !== deleteTargetId));
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setDeletingId(null);
+      setDeleteTargetId(null);
+    }
+  };
+
+  const markAsCompleted = async (id) => {
+    if (!window.confirm('Are you sure the pickup is done? This will mark the listing as completed.')) return;
+    try {
+      const res = await fetch(`${API}/listings/${id}/status`, {
+        method: 'PATCH',
+        headers: authHeader(),
+        body: JSON.stringify({ status: 'completed' }),
+      });
+      if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to update status.');
+      }
+      const data = await res.json();
+      setListings(prev => prev.map(l => l.id === id ? data : l));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const fetchUnreadSummary = useCallback(async () => {
     try {
@@ -194,6 +310,9 @@ const FPDashboard = () => {
     try {
       const quantityValue = Number(formData.qty);
       const servingsValue = Number(formData.servings);
+      const fromDatetimeStr = toDatetime(formData.fromDate, formData.fromTime);
+      const untilDatetimeStr = toDatetime(formData.untilDate, formData.untilTime);
+      const nowLocal = new Date();
 
       if (!Number.isFinite(quantityValue) || quantityValue <= 0) {
         setError('Estimated quantity must be a positive number.');
@@ -205,10 +324,22 @@ const FPDashboard = () => {
         return;
       }
 
+      if (fromDatetimeStr) {
+        const fromDate = new Date(fromDatetimeStr);
+        if (Number.isNaN(fromDate.getTime())) {
+          setError('Please enter a valid "Available from" date and time.');
+          return;
+        }
+        if (fromDate < nowLocal) {
+          setError('The "Available from" time must be now or later.');
+          return;
+        }
+      }
+
       const body = {
         location: formData.location,
-        available_from: toDatetime(formData.fromDate, formData.fromTime),
-        available_until: toDatetime(formData.untilDate, formData.untilTime),
+        available_from: fromDatetimeStr,
+        available_until: untilDatetimeStr,
         notes: formData.notes || null,
         food_items: [
           {
@@ -237,6 +368,10 @@ const FPDashboard = () => {
           {
             match: /available_until must be later than available_from/i,
             text: 'The "Available until" date & time must be after the "Available from" date & time.'
+          },
+          {
+            match: /available_from must be greater than or equal to the current time/i,
+            text: 'The "Available from" time must be now or later.'
           },
           {
             match: /must be timezone-naive datetimes/i,
@@ -308,12 +443,15 @@ const FPDashboard = () => {
     return d.toLocaleString('en-PK', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   };
 
+  const now = new Date();
+
   // Compute stats from real data
   const stats = {
     total: listings.length,
-    available: listings.filter(l => l.status === 'available').length,
+    available: listings.filter(l => l.status === 'available' && new Date(l.available_until) > now).length,
     claimed: listings.filter(l => l.status === 'claimed').length,
     completed: listings.filter(l => l.status === 'completed').length,
+    expired: listings.filter(l => l.status === 'available' && new Date(l.available_until) <= now).length,
   };
 
   const statusFilters = [
@@ -321,11 +459,16 @@ const FPDashboard = () => {
     { key: 'available', label: 'Available', count: stats.available },
     { key: 'claimed', label: 'Claimed', count: stats.claimed },
     { key: 'completed', label: 'Completed', count: stats.completed },
+    { key: 'expired', label: 'Expired', count: stats.expired },
   ];
 
   const filteredListings = statusFilter === 'all'
     ? listings
-    : listings.filter((listing) => listing.status === statusFilter);
+    : statusFilter === 'available'
+      ? listings.filter((l) => l.status === 'available' && new Date(l.available_until) > now)
+      : statusFilter === 'expired'
+        ? listings.filter((l) => l.status === 'available' && new Date(l.available_until) <= now)
+        : listings.filter((listing) => listing.status === statusFilter);
 
   const emptyMessage = statusFilter === 'all'
     ? 'No listings yet. Click "+ Post surplus food" to create your first one!'
@@ -414,6 +557,7 @@ const FPDashboard = () => {
           <div className="stat-card"><div className="stat-label">Available</div><div className="stat-value teal">{stats.available}</div></div>
           <div className="stat-card"><div className="stat-label">Claimed</div><div className="stat-value amber">{stats.claimed}</div></div>
           <div className="stat-card"><div className="stat-label">Completed</div><div className="stat-value gray">{stats.completed}</div></div>
+          <div className="stat-card"><div className="stat-label">Expired</div><div className="stat-value red">{stats.expired}</div></div>
         </div>
 
         <div className="filter-tabs">
@@ -477,18 +621,54 @@ const FPDashboard = () => {
                       <td>{listing.food_items[0]?.estimated_serving || '—'}</td>
                       <td>{listing.location}</td>
                       <td>{formatTime(listing.available_until)}</td>
-                      <td><span className={`badge badge-${listing.status}`}>{listing.status.charAt(0).toUpperCase() + listing.status.slice(1)}</span></td>
                       <td>
+                        <span className={`badge badge-${
+                          (listing.status === 'available' && new Date(listing.available_until) <= now) ? 'expired' : listing.status
+                        }`}>
+                          {(listing.status === 'available' && new Date(listing.available_until) <= now) 
+                            ? 'Expired' 
+                            : listing.status.charAt(0).toUpperCase() + listing.status.slice(1)
+                          }
+                        </span>
+                      </td>
+                      <td onClick={(e) => e.stopPropagation()}>
                         {listing.status === 'claimed' && listing.chat_id ? (
-                          <button
-                            className="btn btn-sm"
-                            style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}
-                            onClick={(e) => { e.stopPropagation(); navigate(`/chat/${listing.chat_id}`); }}
-                          >
-                            💬 Open Chat
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              className="btn btn-sm"
+                              style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}
+                              onClick={() => navigate(`/chat/${listing.chat_id}`)}
+                            >
+                              💬 Open Chat
+                            </button>
+                            <button
+                              className="btn btn-sm"
+                              style={{ background: 'var(--brand)', color: '#fff', border: 'none' }}
+                              onClick={() => markAsCompleted(listing.id)}
+                            >
+                              ✓ Done
+                            </button>
+                          </div>
+                        ) : listing.status === 'available' ? (
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              className="btn btn-sm btn-ghost"
+                              style={{ color: 'var(--brand)', borderColor: 'var(--brand)' }}
+                              onClick={() => openEditModal(listing)}
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button
+                              className="btn btn-sm btn-ghost"
+                              style={{ color: 'crimson', borderColor: 'crimson' }}
+                              onClick={() => deleteListing(listing.id)}
+                              disabled={deletingId === listing.id}
+                            >
+                              {deletingId === listing.id ? 'Deleting...' : '🗑 Delete'}
+                            </button>
+                          </div>
                         ) : (
-                          <button className="btn btn-sm btn-ghost" disabled>No chat yet</button>
+                          <button className="btn btn-sm btn-ghost" disabled>No action</button>
                         )}
                       </td>
                     </tr>
@@ -684,6 +864,110 @@ const FPDashboard = () => {
       {/* TOAST */}
       {showToast && (
         <div className="success-toast show">✓ Listing posted! NGOs have been notified.</div>
+      )}
+
+      {/* EDIT LISTING MODAL */}
+      {showEditModal && (
+        <div className="modal-overlay open">
+          <div className="modal">
+            <div className="modal-header">
+              <h2 className="modal-title">✏️ Edit Listing</h2>
+              <button className="modal-close" onClick={() => setShowEditModal(false)}>✕</button>
+            </div>
+            <form onSubmit={submitEdit}>
+              <div className="modal-body">
+                {editError && <div className="alert alert-error show">{editError}</div>}
+                <div className="form-group">
+                  <label className="form-label">Food name *</label>
+                  <input className="form-input" type="text" value={editFormData.name}
+                    onChange={e => setEditFormData(p => ({ ...p, name: e.target.value }))} required />
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Estimated quantity *</label>
+                    <div className="quantity-input-group">
+                      <input className="form-input" type="number" min="0.01" step="0.01"
+                        value={editFormData.qty}
+                        onChange={e => setEditFormData(p => ({ ...p, qty: e.target.value }))} required />
+                      <select className="form-select" value={editFormData.qtyUnit}
+                        onChange={e => setEditFormData(p => ({ ...p, qtyUnit: e.target.value }))}>
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                        <option value="l">l</option>
+                        <option value="ml">ml</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Approximate servings *</label>
+                    <input className="form-input" type="number" min="1" step="1"
+                      value={editFormData.servings}
+                      onChange={e => setEditFormData(p => ({ ...p, servings: e.target.value }))} required />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Pickup location *</label>
+                  <input className="form-input" type="text" value={editFormData.location}
+                    onChange={e => setEditFormData(p => ({ ...p, location: e.target.value }))} required />
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Available from *</label>
+                    <input className="form-input" type="date" value={editFormData.fromDate}
+                      onChange={e => setEditFormData(p => ({ ...p, fromDate: e.target.value }))} required />
+                    <input className="form-input" type="time" value={editFormData.fromTime}
+                      onChange={e => setEditFormData(p => ({ ...p, fromTime: e.target.value }))} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Available until *</label>
+                    <input className="form-input" type="date" value={editFormData.untilDate}
+                      onChange={e => setEditFormData(p => ({ ...p, untilDate: e.target.value }))} required />
+                    <input className="form-input" type="time" value={editFormData.untilTime}
+                      onChange={e => setEditFormData(p => ({ ...p, untilTime: e.target.value }))} required />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Additional notes</label>
+                  <textarea className="form-textarea" value={editFormData.notes}
+                    onChange={e => setEditFormData(p => ({ ...p, notes: e.target.value }))} />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn" onClick={() => setShowEditModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-brand" disabled={editLoading}>
+                  {editLoading ? <span className="spinner"></span> : 'Save changes →'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {showDeleteConfirm && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2 className="modal-title">🗑 Delete Listing</h2>
+              <button className="modal-close" onClick={() => setShowDeleteConfirm(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                Are you sure you want to delete this listing? This action <strong>cannot be undone</strong>.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+              <button
+                className="btn btn-brand"
+                style={{ background: 'crimson', borderColor: 'crimson' }}
+                onClick={confirmDelete}
+              >
+                Yes, delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

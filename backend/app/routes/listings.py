@@ -1,5 +1,6 @@
 # backend/app/routes/listings.py
 from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session, joinedload
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..auth import decode_token
 from ..database import get_db
 from ..models import Chat, ChatReadState, FoodItem, FoodListing, FoodProvider, ListingClaim, NGO
-from ..schemas import ClaimResponse, ListingCreate, ListingResponse
+from ..schemas import ClaimResponse, ListingCreate, ListingUpdate, ListingResponse, ListingStatusUpdate, ListingStatus
 from ..email_service import send_new_listing_notification, send_claim_notification
 
 router = APIRouter(prefix="/listings", tags=["listings"])
@@ -139,10 +140,12 @@ def get_available_listings(
     db: Session = Depends(get_db),
     _: dict = Depends(require_ngo),
 ):
+    now = datetime.utcnow()
     listings = (
         db.query(FoodListing)
         .options(joinedload(FoodListing.food_items))
         .filter(FoodListing.status == "available")
+        .filter(FoodListing.available_until > now)
         .order_by(FoodListing.created_at.desc())
         .all()
     )
@@ -306,6 +309,126 @@ def get_listing_by_id(
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found.")
     
+    chat_id = listing.claim.chat.id if listing.claim and listing.claim.chat else None
+    d = ListingResponse.model_validate(listing)
+    d.chat_id = chat_id
+    return d
+
+@router.patch("/{listing_id}", response_model=ListingResponse)
+def update_listing(
+    listing_id: int,
+    body: ListingUpdate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_food_provider),
+):
+    listing = (
+        db.query(FoodListing)
+        .options(joinedload(FoodListing.food_items), joinedload(FoodListing.claim).joinedload(ListingClaim.chat))
+        .filter(FoodListing.id == listing_id)
+        .first()
+    )
+
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found.")
+    if listing.food_provider_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You can only edit your own listings.")
+    if listing.status != "available":
+        raise HTTPException(status_code=409, detail="Only available listings can be edited.")
+
+    try:
+        if body.location is not None:
+            listing.location = body.location
+        if body.available_from is not None:
+            listing.available_from = body.available_from
+        if body.available_until is not None:
+            listing.available_until = body.available_until
+        if body.notes is not None:
+            listing.notes = body.notes
+        if body.food_items is not None:
+            for fi in listing.food_items:
+                db.delete(fi)
+            db.flush()
+            for item in body.food_items:
+                db.add(FoodItem(
+                    listing_id=listing.id,
+                    item_name=item.item_name,
+                    estimated_weight=item.estimated_weight,
+                    estimated_serving=item.estimated_serving,
+                    image_url=item.image_url,
+                ))
+        db.commit()
+        db.refresh(listing)
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update listing.")
+
+    chat_id = listing.claim.chat.id if listing.claim and listing.claim.chat else None
+    d = ListingResponse.model_validate(listing)
+    d.chat_id = chat_id
+    return d
+
+@router.delete("/{listing_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_listing(
+    listing_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_food_provider),
+):
+    listing = (
+        db.query(FoodListing)
+        .filter(FoodListing.id == listing_id)
+        .first()
+    )
+
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found.")
+
+    if listing.food_provider_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You can only delete your own listings.")
+
+    if listing.status != "available":
+        raise HTTPException(status_code=409, detail="Only available listings can be deleted.")
+
+    try:
+        db.delete(listing)
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete listing.")
+
+@router.patch("/{listing_id}/status", response_model=ListingResponse)
+def update_listing_status(
+    listing_id: int,
+    body: ListingStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_food_provider),
+):
+    listing = (
+        db.query(FoodListing)
+        .options(joinedload(FoodListing.food_items), joinedload(FoodListing.claim).joinedload(ListingClaim.chat))
+        .filter(FoodListing.id == listing_id)
+        .first()
+    )
+
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found.")
+    
+    if listing.food_provider_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You can only update status for your own listings.")
+
+    if body.status == ListingStatus.completed:
+        if listing.status != "claimed":
+            raise HTTPException(status_code=400, detail="Only claimed listings can be marked as completed.")
+        listing.status = "completed"
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported status transition via this endpoint.")
+
+    try:
+        db.commit()
+        db.refresh(listing)
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update listing status.")
+
     chat_id = listing.claim.chat.id if listing.claim and listing.claim.chat else None
     d = ListingResponse.model_validate(listing)
     d.chat_id = chat_id
