@@ -160,6 +160,26 @@ const FPDashboard = () => {
     }
   };
 
+  const markAsCompleted = async (id) => {
+    if (!window.confirm('Are you sure the pickup is done? This will mark the listing as completed.')) return;
+    try {
+      const res = await fetch(`${API}/listings/${id}/status`, {
+        method: 'PATCH',
+        headers: authHeader(),
+        body: JSON.stringify({ status: 'completed' }),
+      });
+      if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to update status.');
+      }
+      const data = await res.json();
+      setListings(prev => prev.map(l => l.id === id ? data : l));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   const fetchUnreadSummary = useCallback(async () => {
     try {
       const res = await fetch(`${API}/chats/unread-summary`, {
@@ -613,13 +633,22 @@ const FPDashboard = () => {
                       </td>
                       <td onClick={(e) => e.stopPropagation()}>
                         {listing.status === 'claimed' && listing.chat_id ? (
-                          <button
-                            className="btn btn-sm"
-                            style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}
-                            onClick={() => navigate(`/chat/${listing.chat_id}`)}
-                          >
-                            💬 Open Chat
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              className="btn btn-sm"
+                              style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}
+                              onClick={() => navigate(`/chat/${listing.chat_id}`)}
+                            >
+                              💬 Open Chat
+                            </button>
+                            <button
+                              className="btn btn-sm"
+                              style={{ background: 'var(--brand)', color: '#fff', border: 'none' }}
+                              onClick={() => markAsCompleted(listing.id)}
+                            >
+                              ✓ Done
+                            </button>
+                          </div>
                         ) : listing.status === 'available' ? (
                           <div style={{ display: 'flex', gap: '6px' }}>
                             <button

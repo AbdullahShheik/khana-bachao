@@ -208,10 +208,18 @@ const NGODashboard = () => {
   // Filter listings based on local status
   const filteredListings = listings.filter((l) => {
     if (filter === 'available') return l._status === 'available';
-    return l._status === 'claimed' || l._status === 'completed';
+    if (filter === 'claimed') return l._status === 'claimed';
+    if (filter === 'completed') return l._status === 'completed';
+    return true;
   });
+
   const availableCount = listings.filter(l => l._status === 'available').length;
-  const claimedCount = listings.filter(l => l._status === 'claimed' || l._status === 'completed').length;
+  const claimedCount = listings.filter(l => l._status === 'claimed').length;
+  const completedCount = listings.filter(l => l._status === 'completed').length;
+  
+  const totalMeals = listings
+    .filter(l => l._status === 'completed')
+    .reduce((sum, l) => sum + l.food_items.reduce((s, fi) => s + (fi.estimated_serving || 0), 0), 0);
 
   return (
     <div className="dashboard-ngo">
@@ -289,9 +297,9 @@ const NGODashboard = () => {
         {/* Stat cards — computed from real data */}
         <div className="stat-grid">
           <div className="stat-card"><div className="stat-label">Available now</div><div className="stat-value teal">{availableCount}</div></div>
-          <div className="stat-card"><div className="stat-label">Claimed by you</div><div className="stat-value amber">{claimedCount}</div></div>
-          <div className="stat-card"><div className="stat-label">Total pickups done</div><div className="stat-value gray">—</div></div>
-          <div className="stat-card"><div className="stat-label">Meals facilitated</div><div className="stat-value brand">—</div></div>
+          <div className="stat-card"><div className="stat-label">Active claims</div><div className="stat-value amber">{claimedCount}</div></div>
+          <div className="stat-card"><div className="stat-label">Pickups completed</div><div className="stat-value gray">{completedCount}</div></div>
+          <div className="stat-card"><div className="stat-label">Meals facilitated</div><div className="stat-value brand">{totalMeals}</div></div>
         </div>
 
         {/* Filter tabs */}
@@ -301,6 +309,9 @@ const NGODashboard = () => {
           </button>
           <button className={`filter-tab ${filter === 'claimed' ? 'active' : ''}`} onClick={() => setFilter('claimed')}>
             My claims <span className="filter-count">{claimedCount}</span>
+          </button>
+          <button className={`filter-tab ${filter === 'completed' ? 'active' : ''}`} onClick={() => setFilter('completed')}>
+            History <span className="filter-count">{completedCount}</span>
           </button>
         </div>
 

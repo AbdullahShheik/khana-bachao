@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..auth import decode_token
 from ..database import get_db
 from ..models import Chat, ChatReadState, FoodItem, FoodListing, FoodProvider, ListingClaim, NGO
-from ..schemas import ClaimResponse, ListingCreate, ListingUpdate, ListingResponse
+from ..schemas import ClaimResponse, ListingCreate, ListingUpdate, ListingResponse, ListingStatusUpdate, ListingStatus
 from ..email_service import send_new_listing_notification, send_claim_notification
 
 router = APIRouter(prefix="/listings", tags=["listings"])
@@ -394,3 +394,42 @@ def delete_listing(
     except SQLAlchemyError:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to delete listing.")
+
+@router.patch("/{listing_id}/status", response_model=ListingResponse)
+def update_listing_status(
+    listing_id: int,
+    body: ListingStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_food_provider),
+):
+    listing = (
+        db.query(FoodListing)
+        .options(joinedload(FoodListing.food_items), joinedload(FoodListing.claim).joinedload(ListingClaim.chat))
+        .filter(FoodListing.id == listing_id)
+        .first()
+    )
+
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found.")
+    
+    if listing.food_provider_id != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You can only update status for your own listings.")
+
+    if body.status == ListingStatus.completed:
+        if listing.status != "claimed":
+            raise HTTPException(status_code=400, detail="Only claimed listings can be marked as completed.")
+        listing.status = "completed"
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported status transition via this endpoint.")
+
+    try:
+        db.commit()
+        db.refresh(listing)
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update listing status.")
+
+    chat_id = listing.claim.chat.id if listing.claim and listing.claim.chat else None
+    d = ListingResponse.model_validate(listing)
+    d.chat_id = chat_id
+    return d
