@@ -11,6 +11,8 @@ const NGODashboard = () => {
   const [showNotif, setShowNotif] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [unreadChats, setUnreadChats] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [loadingListings, setLoadingListings] = useState(true);
   const [claimingId, setClaimingId] = useState(null);
   const [claimError, setClaimError] = useState('');
@@ -98,6 +100,34 @@ const NGODashboard = () => {
     }
   };
 
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch(`${API}/notifications`, {
+        headers: authHeader(),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setNotifications(data);
+      setUnreadNotifs(data.filter(n => !n.is_read).length);
+    } catch {
+      // keep existing value
+    }
+  };
+
+  const markNotifsRead = async () => {
+    if (unreadNotifs === 0) return;
+    try {
+      await fetch(`${API}/notifications/mark-read`, {
+        method: 'PATCH',
+        headers: authHeader(),
+      });
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadNotifs(0);
+    } catch {
+      // ignore
+    }
+  };
+
   const toggleNotifications = async () => {
     const newVal = !emailNotifications;
     try {
@@ -128,9 +158,11 @@ const NGODashboard = () => {
     fetchListings();
     fetchUnreadSummary();
     fetchProfile();
+    fetchNotifications();
 
     const interval = setInterval(fetchUnreadSummary, 5000);
-    return () => clearInterval(interval);
+    const notifInterval = setInterval(fetchNotifications, 5000);
+    return () => { clearInterval(interval); clearInterval(notifInterval); };
   }, [navigate]);
 
   const logout = () => {
@@ -257,17 +289,27 @@ const NGODashboard = () => {
           >
             {emailNotifications ? '✉️' : '🚫'}
           </button>
-          <button className="notif-btn" onClick={() => setShowNotif(!showNotif)}>
+          <button className="notif-btn" onClick={() => { setShowNotif(!showNotif); markNotifsRead(); }}>
             🔔
-            <span className="notif-dot"></span>
+            {unreadNotifs > 0 && <span className="notif-dot"></span>}
           </button>
 
           {showNotif && (
             <div className="notif-panel open">
               <div className="notif-panel-header">Notifications</div>
-              <div className="notif-item" style={{ color: '#888', fontSize: '14px', padding: '12px' }}>
-                No notifications yet.
-              </div>
+              {notifications.length === 0 ? (
+                <div className="notif-item" style={{ color: '#888', fontSize: '14px', padding: '12px' }}>
+                  No notifications yet.
+                </div>
+              ) : (
+                notifications.map(n => (
+                  <div key={n.id} className={`notif-item ${!n.is_read ? 'unread' : ''}`}>
+                    <div className="notif-item-title">{n.title}</div>
+                    <div className="notif-item-sub">{n.body}</div>
+                    <div className="notif-item-time">{new Date(n.created_at).toLocaleString('en-PK', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+                  </div>
+                ))
+              )}
             </div>
           )}
 
