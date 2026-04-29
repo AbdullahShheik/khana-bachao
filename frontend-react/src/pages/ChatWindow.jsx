@@ -411,21 +411,36 @@ const ChatWindow = () => {
                 <div ref={messagesEndRef} />
               </div>
 
-              <form className="chat-input-bar" onSubmit={sendMessage}>
-                <input
-                  className="chat-input"
-                  type="text"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder="Type your message..."
-                  maxLength={1000}
-                  disabled={sending}
-                />
-                <button className="chat-send" type="submit" disabled={sending}>
-                  {sending ? <span className="spinner" style={{ width: 16, height: 16 }} /> : '➤'}
-                </button>
-              </form>
-              {sendError && <div className="alert alert-error show" style={{ margin: '0 16px 12px' }}>{sendError}</div>}
+              {activeChatDetail?.listing_status === 'completed' || activeThread?.listing_status === 'completed' ? (
+                <div style={{
+                  padding: '16px',
+                  textAlign: 'center',
+                  color: '#888',
+                  fontSize: '14px',
+                  borderTop: '1px solid var(--border)',
+                  background: 'var(--bg-secondary)'
+                }}>
+                  🔒 This chat is closed — the pickup has been completed.
+                </div>
+              ) : (
+                <>
+                  <form className="chat-input-bar" onSubmit={sendMessage}>
+                    <input
+                      className="chat-input"
+                      type="text"
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      placeholder="Type your message..."
+                      maxLength={1000}
+                      disabled={sending}
+                    />
+                    <button className="chat-send" type="submit" disabled={sending}>
+                      {sending ? <span className="spinner" style={{ width: 16, height: 16 }} /> : '➤'}
+                    </button>
+                  </form>
+                  {sendError && <div className="alert alert-error show" style={{ margin: '0 16px 12px' }}>{sendError}</div>}
+                </>
+              )}
             </>
           )}
         </section>
