@@ -327,6 +327,12 @@ def send_message(
 
     _ensure_chat_access(chat, current_user)
 
+    if chat.claim.listing.status == "completed":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This chat is closed. The listing has been completed.",
+        )
+
     try:
         message = Message(
             chat_id=chat.id,
