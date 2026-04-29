@@ -520,10 +520,8 @@ const FPDashboard = () => {
           {showNotif && (
             <div className="notif-panel open">
               <div className="notif-panel-header">Notifications</div>
-              <div className="notif-item unread">
-                <div className="notif-item-title">Listing claimed!</div>
-                <div className="notif-item-sub">Khidmat Foundation claimed your Biryani listing.</div>
-                <div className="notif-item-time">2 min ago</div>
+              <div className="notif-item" style={{ color: '#888', fontSize: '14px', padding: '12px' }}>
+                No notifications yet.
               </div>
             </div>
           )}
