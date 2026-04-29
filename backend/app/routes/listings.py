@@ -9,7 +9,7 @@ from ..auth import decode_token
 from ..database import get_db
 from ..models import Chat, ChatReadState, FoodItem, FoodListing, FoodProvider, ListingClaim, NGO, Notification
 from ..schemas import ClaimResponse, ListingCreate, ListingUpdate, ListingResponse, ListingStatusUpdate, ListingStatus
-from ..email_service import send_new_listing_notification, send_claim_notification
+from ..email_service import send_new_listing_notification, send_claim_notification, send_completion_notification
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -448,6 +448,8 @@ def update_listing_status(
     try:
         if listing.claim:
             item_names = [fi.item_name for fi in listing.food_items]
+            ngo = db.query(NGO).filter(NGO.id == listing.claim.ngo_id).first()
+            fp = db.query(FoodProvider).filter(FoodProvider.id == current_user["id"]).first()
             db.add(Notification(
                 recipient_role="ngo",
                 recipient_id=listing.claim.ngo_id,
@@ -455,6 +457,15 @@ def update_listing_status(
                 body=f"The food provider has marked the pickup of {', '.join(item_names)} at {listing.location} as completed.",
             ))
             db.commit()
+            if ngo and ngo.email and ngo.email_notifications:
+                send_completion_notification(
+                    ngo_email=ngo.email,
+                    ngo_name=ngo.ngo_name,
+                    listing_id=listing.id,
+                    food_items=item_names,
+                    location=listing.location,
+                    provider_name=fp.name if fp else "The food provider",
+                )
     except Exception as e:
         print(f"[listings] Failed to send completion notification: {e}")
 

@@ -145,3 +145,52 @@ def send_claim_notification(
     """
 
     _send_in_background(fp_email, subject, plain, html)
+
+# ──────────────────────────────────────────
+#  Notification: Listing completed → NGO
+# ──────────────────────────────────────────
+
+def send_completion_notification(
+    ngo_email: str,
+    ngo_name: str,
+    listing_id: int,
+    food_items: list[str],
+    location: str,
+    provider_name: str,
+):
+    """Notify an NGO that their claimed listing has been marked as completed."""
+    dishes = ", ".join(food_items) if food_items else "Your listing"
+    subject = f"✓ Pickup completed: {dishes}"
+
+    plain = (
+        f"Hi {ngo_name},\n\n"
+        f"The food provider has marked the following pickup as completed:\n\n"
+        f"Food: {dishes}\n"
+        f"Location: {location}\n"
+        f"Provider: {provider_name}\n\n"
+        f"Thank you for helping reduce food waste!\n\n"
+        f"— Khana Bachao"
+    )
+
+    html = f"""\
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #333; max-width: 520px;">
+        <h2 style="color: #1D9E75;">Pickup marked as completed! ✓</h2>
+        <p>Hi {ngo_name},</p>
+        <p>The food provider has marked the following pickup as completed:</p>
+        <div style="background: #E1F5EE; border-left: 4px solid #1D9E75; padding: 16px; border-radius: 6px; margin: 16px 0;">
+          <p style="margin: 0 0 6px;"><strong>🍱 Food:</strong> {dishes}</p>
+          <p style="margin: 0 0 6px;"><strong>📍 Location:</strong> {location}</p>
+          <p style="margin: 0;"><strong>👤 Provider:</strong> {provider_name}</p>
+        </div>
+        <p>Thank you for helping reduce food waste and feeding communities!</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+        <p style="font-size: 12px; color: #999;">
+          You received this because you have email notifications enabled.
+          You can turn them off from your dashboard settings.
+        </p>
+      </body>
+    </html>
+    """
+
+    _send_in_background(ngo_email, subject, plain, html)
