@@ -189,3 +189,18 @@ class ChatReadState(Base):
 
     # Relationships
     chat = relationship("Chat", back_populates="read_states")
+
+# ══════════════════════════════════════════
+#  NOTIFICATIONS
+# ══════════════════════════════════════════
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    recipient_role = Column(Enum("food_provider", "ngo", name="notif_recipient_role"), nullable=False)
+    recipient_id = Column(Integer, nullable=False)
+    title        = Column(String(255), nullable=False)
+    body         = Column(Text, nullable=False)
+    is_read      = Column(Boolean, default=False)
+    created_at   = Column(DateTime, server_default=func.now())

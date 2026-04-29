@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..auth import decode_token
 from ..database import get_db
-from ..models import Chat, ChatReadState, FoodItem, FoodListing, FoodProvider, ListingClaim, NGO
+from ..models import Chat, ChatReadState, FoodItem, FoodListing, FoodProvider, ListingClaim, NGO, Notification
 from ..schemas import ClaimResponse, ListingCreate, ListingUpdate, ListingResponse, ListingStatusUpdate, ListingStatus
 from ..email_service import send_new_listing_notification, send_claim_notification
 
@@ -111,15 +111,21 @@ def create_listing(
             detail="Listing created but failed to load response.",
         )
 
-    # --- Notify all NGOs with email_notifications enabled ---
+    # --- Notify all NGOs ---
     try:
-        ngos = db.query(NGO).filter(NGO.email_notifications == True).all()
+        ngos = db.query(NGO).all()
         fp = db.query(FoodProvider).filter(FoodProvider.id == current_user["id"]).first()
         provider_name = fp.name if fp else "A food provider"
         item_names = [fi.item_name for fi in created_listing.food_items]
         avail_until = str(created_listing.available_until)
         for ngo in ngos:
-            if ngo.email:
+            db.add(Notification(
+                recipient_role="ngo",
+                recipient_id=ngo.id,
+                title="New listing available!",
+                body=f"{provider_name} posted {', '.join(item_names)} at {created_listing.location}.",
+            ))
+            if ngo.email and ngo.email_notifications:
                 send_new_listing_notification(
                     ngo_email=ngo.email,
                     ngo_name=ngo.ngo_name,
@@ -129,6 +135,7 @@ def create_listing(
                     available_until=avail_until,
                     provider_name=provider_name,
                 )
+        db.commit()
     except Exception as e:
         print(f"[listings] Failed to send new-listing notifications: {e}")
 
@@ -255,17 +262,25 @@ def claim_listing(
         try:
             fp = db.query(FoodProvider).filter(FoodProvider.id == listing.food_provider_id).first()
             ngo = db.query(NGO).filter(NGO.id == current_user["id"]).first()
+            ngo_name = ngo.ngo_name if ngo else "An NGO"
+            item_names = [fi.item_name for fi in (
+                db.query(FoodItem).filter(FoodItem.listing_id == listing.id).all()
+            )]
+            db.add(Notification(
+                recipient_role="food_provider",
+                recipient_id=listing.food_provider_id,
+                title="Your listing was claimed!",
+                body=f"{ngo_name} claimed your listing for {', '.join(item_names)} at {listing.location}.",
+            ))
+            db.commit()
             if fp and fp.email and fp.email_notifications:
-                item_names = [fi.item_name for fi in (
-                    db.query(FoodItem).filter(FoodItem.listing_id == listing.id).all()
-                )]
                 send_claim_notification(
                     fp_email=fp.email,
                     fp_name=fp.name,
                     listing_id=listing.id,
                     food_items=item_names,
                     location=listing.location,
-                    ngo_name=ngo.ngo_name if ngo else "An NGO",
+                    ngo_name=ngo_name,
                 )
         except Exception as e:
             print(f"[listings] Failed to send claim notification: {e}")
@@ -428,6 +443,20 @@ def update_listing_status(
     except SQLAlchemyError:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to update listing status.")
+
+    # --- Notify the NGO ---
+    try:
+        if listing.claim:
+            item_names = [fi.item_name for fi in listing.food_items]
+            db.add(Notification(
+                recipient_role="ngo",
+                recipient_id=listing.claim.ngo_id,
+                title="Pickup marked as completed!",
+                body=f"The food provider has marked the pickup of {', '.join(item_names)} at {listing.location} as completed.",
+            ))
+            db.commit()
+    except Exception as e:
+        print(f"[listings] Failed to send completion notification: {e}")
 
     chat_id = listing.claim.chat.id if listing.claim and listing.claim.chat else None
     d = ListingResponse.model_validate(listing)

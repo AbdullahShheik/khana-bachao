@@ -13,6 +13,8 @@ const FPDashboard = () => {
   const [unreadChats, setUnreadChats] = useState(0);
   const [listingsLoading, setListingsLoading] = useState(true);
   const [listingsError, setListingsError] = useState('');
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [imageUrl, setImageUrl] = useState(null);
@@ -22,6 +24,8 @@ const FPDashboard = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [editingListing, setEditingListing] = useState(null);
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [completeTargetId, setCompleteTargetId] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editFormData, setEditFormData] = useState({
     name: '', qty: '', qtyUnit: 'kg', servings: '',
@@ -161,24 +165,31 @@ const FPDashboard = () => {
   };
 
   const markAsCompleted = async (id) => {
-    if (!window.confirm('Are you sure the pickup is done? This will mark the listing as completed.')) return;
-    try {
-      const res = await fetch(`${API}/listings/${id}/status`, {
-        method: 'PATCH',
-        headers: authHeader(),
-        body: JSON.stringify({ status: 'completed' }),
-      });
-      if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || 'Failed to update status.');
-      }
+  setCompleteTargetId(id);
+  setShowCompleteConfirm(true);
+};
+
+const confirmMarkAsCompleted = async () => {
+  setShowCompleteConfirm(false);
+  try {
+    const res = await fetch(`${API}/listings/${completeTargetId}/status`, {
+      method: 'PATCH',
+      headers: authHeader(),
+      body: JSON.stringify({ status: 'completed' }),
+    });
+    if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
+    if (!res.ok) {
       const data = await res.json();
-      setListings(prev => prev.map(l => l.id === id ? data : l));
-    } catch (err) {
-      alert(err.message);
+      throw new Error(data.detail || 'Failed to update status.');
     }
-  };
+    const data = await res.json();
+    setListings(prev => prev.map(l => l.id === completeTargetId ? data : l));
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    setCompleteTargetId(null);
+  }
+};
 
   const fetchUnreadSummary = useCallback(async () => {
     try {
@@ -214,6 +225,34 @@ const FPDashboard = () => {
     }
   }, []);
 
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/notifications`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('kb_token')}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setNotifications(data);
+      setUnreadNotifs(data.filter(n => !n.is_read).length);
+    } catch {
+      // keep existing value
+    }
+  }, []);
+
+  const markNotifsRead = async () => {
+    if (unreadNotifs === 0) return;
+    try {
+      await fetch(`${API}/notifications/mark-read`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${localStorage.getItem('kb_token')}` },
+      });
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadNotifs(0);
+    } catch {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('kb_token');
     const role = localStorage.getItem('kb_role');
@@ -228,9 +267,11 @@ const FPDashboard = () => {
     fetchListings();
     fetchUnreadSummary();
     fetchProfile();
+    fetchNotifications();
 
     const interval = setInterval(fetchUnreadSummary, 5000);
-    return () => clearInterval(interval);
+    const notifInterval = setInterval(fetchNotifications, 5000);
+    return () => { clearInterval(interval); clearInterval(notifInterval); };
   }, [navigate, fetchListings, fetchUnreadSummary, fetchProfile]);
 
   const toggleNotifications = async () => {
@@ -512,17 +553,27 @@ const FPDashboard = () => {
           >
             {emailNotifications ? '✉️' : '🚫'}
           </button>
-          <button className="notif-btn" onClick={() => setShowNotif(!showNotif)}>
-            🔔
-            <span className="notif-dot"></span>
+          <button className="notif-btn" onClick={() => { setShowNotif(!showNotif); markNotifsRead(); }}>
+  🔔
+            {unreadNotifs > 0 && <span className="notif-dot"></span>}
           </button>
 
           {showNotif && (
             <div className="notif-panel open">
               <div className="notif-panel-header">Notifications</div>
-              <div className="notif-item" style={{ color: '#888', fontSize: '14px', padding: '12px' }}>
-                No notifications yet.
-              </div>
+              {notifications.length === 0 ? (
+                <div className="notif-item" style={{ color: '#888', fontSize: '14px', padding: '12px' }}>
+                  No notifications yet.
+                </div>
+              ) : (
+                notifications.map(n => (
+                  <div key={n.id} className={`notif-item ${!n.is_read ? 'unread' : ''}`}>
+                    <div className="notif-item-title">{n.title}</div>
+                    <div className="notif-item-sub">{n.body}</div>
+                    <div className="notif-item-time">{new Date(n.created_at).toLocaleString('en-PK', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+                  </div>
+                ))
+              )}
             </div>
           )}
 
@@ -962,6 +1013,31 @@ const FPDashboard = () => {
                 onClick={confirmDelete}
               >
                 Yes, delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* COMPLETE CONFIRMATION MODAL */}
+      {showCompleteConfirm && (
+        <div className="modal-overlay open">
+          <div className="modal" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2 className="modal-title">✓ Mark as Completed</h2>
+              <button className="modal-close" onClick={() => setShowCompleteConfirm(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                Are you sure the pickup is done? This will mark the listing as <strong>completed</strong> and cannot be undone.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn" onClick={() => setShowCompleteConfirm(false)}>Cancel</button>
+              <button
+                className="btn btn-brand"
+                onClick={confirmMarkAsCompleted}
+              >
+                Yes, mark as done
               </button>
             </div>
           </div>
