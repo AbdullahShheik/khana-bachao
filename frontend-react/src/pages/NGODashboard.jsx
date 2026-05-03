@@ -215,6 +215,34 @@ const NGODashboard = () => {
     }
   };
 
+  const cancelClaim = async (id) => {
+    if (!window.confirm('Are you sure you want to cancel this claim? This will also delete the chat history.')) return;
+    setClaimingId(id); // reuse state for loading
+    try {
+      const res = await fetch(`${API}/listings/${id}/unclaim`, {
+        method: 'POST',
+        headers: authHeader(),
+      });
+      if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to cancel claim');
+      }
+      // Success! Update local state
+      setListings((prev) =>
+        prev.map((listing) =>
+          listing.id === id
+            ? { ...listing, status: 'available', _status: 'available', chat_id: null }
+            : listing
+        )
+      );
+    } catch (err) {
+      setClaimError(err.message);
+    } finally {
+      setClaimingId(null);
+    }
+  };
+
   const getInitials = (name) => {
     if (!name) return '?';
     return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -402,26 +430,36 @@ const NGODashboard = () => {
                       <div className="provider-dot">FP</div>
                       Provider #{l.food_provider_id}
                     </div>
-                    {l._status === 'available' ? (
-                      <button
-                        className="btn btn-sm btn-teal"
-                        onClick={(e) => { e.stopPropagation(); claimListing(l.id); }}
-                        disabled={claimingId === l.id}
-                      >
-                        {claimingId === l.id ? 'Claiming...' : 'Claim listing'}
-                      </button>
-                    ) : l._status === 'claimed' ? (
-                      <button
-                        className="btn btn-sm"
-                        style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}
-                        onClick={(e) => { e.stopPropagation(); navigate(`/chat/${l.chat_id}`); }}
-                        disabled={!l.chat_id}
-                      >
-                        💬 Open Chat
-                      </button>
-                    ) : (
-                      <button className="btn btn-sm btn-ghost" disabled>Completed</button>
-                    )}
+                      {l._status === 'available' ? (
+                        <button
+                          className="btn btn-sm btn-teal"
+                          onClick={(e) => { e.stopPropagation(); claimListing(l.id); }}
+                          disabled={claimingId === l.id}
+                        >
+                          {claimingId === l.id ? 'Claiming...' : 'Claim listing'}
+                        </button>
+                      ) : l._status === 'claimed' ? (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            className="btn btn-sm"
+                            style={{ borderColor: 'var(--brand)', color: 'var(--brand)' }}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/chat/${l.chat_id}`); }}
+                            disabled={!l.chat_id}
+                          >
+                            💬 Open Chat
+                          </button>
+                          <button
+                            className="btn btn-sm btn-ghost"
+                            style={{ color: '#d32f2f' }}
+                            onClick={(e) => { e.stopPropagation(); cancelClaim(l.id); }}
+                            disabled={claimingId === l.id}
+                          >
+                            ✕ Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button className="btn btn-sm btn-ghost" disabled>Completed</button>
+                      )}
                   </div>
                 </div>
               );

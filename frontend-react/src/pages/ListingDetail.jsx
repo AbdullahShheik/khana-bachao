@@ -73,6 +73,25 @@ const ListingDetail = () => {
     }
   };
 
+  const handleCancelClaim = async () => {
+    if (!window.confirm('Are you sure you want to cancel this claim? This will also delete the chat history.')) return;
+    try {
+      const res = await fetch(`${API}/listings/${id}/unclaim`, {
+        method: 'POST',
+        headers: authHeader(),
+      });
+      if (res.status === 401) { localStorage.clear(); navigate('/login'); return; }
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to cancel claim');
+      }
+      setListing(prev => ({ ...prev, status: 'available' }));
+      setChatId(null);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const handleComplete = async () => {
     if (!window.confirm('Are you sure the pickup is done?')) return;
     try {
@@ -240,13 +259,23 @@ const ListingDetail = () => {
                 </button>
               )}
               {role === 'ngo' && listing.status === 'claimed' && (
-                <button
-                  className="btn btn-brand ld-action-btn"
-                  onClick={() => navigate(`/chat/${chatId}`)}
-                  disabled={!chatId}
-                >
-                  💬 Open Chat
-                </button>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    className="btn btn-brand ld-action-btn"
+                    onClick={() => navigate(`/chat/${chatId}`)}
+                    disabled={!chatId}
+                    style={{ flex: 1 }}
+                  >
+                    💬 Open Chat
+                  </button>
+                  <button
+                    className="btn btn-ghost ld-action-btn"
+                    onClick={handleCancelClaim}
+                    style={{ flex: 1, color: '#d32f2f', borderColor: '#d32f2f' }}
+                  >
+                    ✕ Cancel Claim
+                  </button>
+                </div>
               )}
               {role === 'ngo' && listing.status === 'completed' && (
                 <div className="ld-banner completed">✓ This listing has been completed.</div>
